@@ -15,7 +15,7 @@ def generate_random_ground_points(
         N_smooth: int = 10,
         seed: int = None,
         is_x_location_random: bool = False,
-        fluctuation_range: int = None
+        fluctuation_range: int = 0
 ) -> np.ndarray:
     seed = get_random_seed(title='gen_rand_ground') if seed is None else seed
     np.random.seed(seed)
@@ -27,7 +27,7 @@ def generate_random_ground_points(
     y = y - y.min()
 
     if is_x_location_random:
-        x = np.array([0, *sorted(np.random.random(size=num_vpi - 2)), distance_meter])
+        x = np.array([0, *sorted(np.random.random(size=num_vpi - 2)), 1]) * distance_meter
     else:
         x = np.arange(y.size) / y.size * (distance_meter + distance_meter / num_vpi)
 
@@ -48,20 +48,26 @@ def calculate_elevation(points: np.array, x: float) -> float:
         return p1[1] + (x - p1[0]) * (p2[1] - p1[1]) / (p2[0] - p1[0])
 
 
-def discretize_points(points: np.array, dx: float = 100, dy: float = 1) -> np.ndarray:
+def discretize_points(points: np.array, dx: float, dy: float) -> np.ndarray:
     x = np.arange(points[0, 0], points[-1, 0] + dx, dx)
     x = x[:-1] if x[-1] > points[-1, 0] else x
     y = np.array([calculate_elevation(points, i) // dy * dy for i in x])
     return np.array([x, y]).T
 
 
+def shift_point_coordinates(points: np.array) -> tuple[np.ndarray, tuple[float, float]]:
+    x, y = points.T
+    bottom_left_corner_coordinates = x.min(), y.min()
+    x = x - x.min()
+    y = y - y.min()
+    new_points = np.array([x, y]).T
+    return new_points, bottom_left_corner_coordinates
+
+
 class Ground:
     def __init__(self, name: str, type_: str = "random") -> None:
-
-        self.name = name
-        self.ds = None
-        self.de = None
-        self.theta = None
+        self.ds: float = None
+        self.de: float = None
         if type_ in ["random", "real"]:
             data = read_data(f"ground_data\\{type_}_ground_data.json")[name]
         else:
@@ -74,6 +80,9 @@ class Ground:
                 except ValueError:
                     pass
             setattr(self, k, v)
+        self.points: np.ndarray = self.generate_points()
+        self.bottom_left_corner_coordinate: tuple[float] = None
+        self.points_index: np.ndarray = self.generate_point_index()  # also update bottom_left_corner_coordinate
 
     def generate_points(self) -> np.ndarray:
         if "point_arr" in self.__dict__:
@@ -93,9 +102,16 @@ class Ground:
             data = read_data(f"ground_data\\{self.__dict__['point_arr_file']}").values
             return data
 
-    def shift_point_coordinates(self) -> np.ndarray:
+    def generate_point_index(self) -> np.ndarray:
         # 处理points转换，变成ix，iy和左下角坐标值
-        ...
+        discrete_points = discretize_points(points=self.points, dx=self.ds, dy=self.de)
+        discrete_points, bottom_left_corner_coordinate = shift_point_coordinates(points=discrete_points)
+
+        # update attribute
+        self.bottom_left_corner_coordinate = bottom_left_corner_coordinate
+
+        points_index = np.array([discrete_points[:, 0] / self.ds, discrete_points[:, 1] / self.de]).astype(int).T
+        return points_index
 
     def get_v_lim_array(self) -> np.ndarray:
         ...
@@ -104,13 +120,21 @@ class Ground:
         ...
 
     def get_potential_vpi_array(self) -> np.ndarray:
-        ...
+        iys_diff3 = np.diff(self.points_index[:, 1], n=3)
+        p_vpi_array = np.zeros(self.points_index.shape[0])
+        for i, iy_diff in enumerate(iys_diff3[:-1]):
+            ix = i + 2
+            next_iy_diff = iys_diff3[i + 1]
+            if iy_diff * next_iy_diff < 0:
+                p_vpi_array[ix] = 1
+        p_vpi_array[0], p_vpi_array[-1] = 1, 1
+        return p_vpi_array.astype(int)
 
 
 def main():
-    points = generate_random_ground_points(distance_meter=3000, max_elevation_meter=45)
-    print(points.astype(int))
-    print(discretize_points(points).astype(int))
+    gd = Ground(name="gd1")
+    # print(gd.__dict__)
+    print(gd.get_potential_vpi_array())
     pass
 
 
