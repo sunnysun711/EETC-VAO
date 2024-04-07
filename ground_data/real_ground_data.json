@@ -1,0 +1,26 @@
+{
+    "gd_gaoyan":{
+        "theta": 20,
+        "ds": 100, 
+        "de": 1,
+        "TD_MAX": 1840, 
+        "TU_MAX": 1840,
+        "TD_MIN": 1600, 
+        "TU_MIN": 1600,
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "GaoYan-DMX-modified.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": 547500,
+        "N_tr_down": 547500
+    }
+}
