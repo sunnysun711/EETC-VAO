@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Union
 
 import numpy as np
 import gurobipy as gp
@@ -13,9 +13,9 @@ from train import Train
 
 CONST: dict[str, float] = {
     'epsilon': 10e-5,
-    'e_u': 2.7777777777778 * 10e-7,
-    'lambda': 0.8,
-    'eta': 0.85,
+    'e_u': 2.7777777777778 * 10e-7,  # e_u: 1 J = e_u x 1 kWh
+    'lambda': 0.8,  # lambda: the average price of electricity in RMB per kWh. 按照居民用电差不多0.8元一度
+    'eta': 0.85,  # eta: the conversion factor from electricity to kinetic energy. 按照王青元教授开会时候说的，0.85。
 }
 
 
@@ -71,7 +71,7 @@ def add_tc_variables(
     return [u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v]
 
 
-def add_vao_constraints(model: gp.Model, variables: dict[str, gp.Var], ground: Ground) -> None:
+def add_vao_constraints(model: gp.Model, ground: Ground, variables: dict[str, gp.Var]) -> None:
     e, pi, C, C6tn_e, gamma, z1, z2, z3, z4, z5 = variables.values()
 
     S = ground.num_s
@@ -168,28 +168,22 @@ def add_vao_logic_cuts(model: gp.Model, ground: Ground, variables: dict[str, gp.
 
 
 def add_vao_valid_inequalities(model: gp.Model, ground: Ground, variables: dict[str, gp.Var]):
-    # 用之前在遗传算法中得出的e的取值范围的方法，加入那些约束，同时增加判断条件，进而限制一些z和gamma取值。
-    # # lower and upper bound of the vao solution, size = S.
-    #     # upper bound constrained by: 1) ground max, 2) max_grad from start, 3) max_grad from end.
-    #     ub_max_ele = np.ones_like(case.E6G[1:-1]) * case.E6G.max()
-    #     ub_imax_start = np.arange(start=0, stop=case.NUM_S) * case.I_MAX * case.DS / case.DE + case.E6G[0]
-    #     ub_imax_end = np.arange(start=case.NUM_S - 1, stop=-1, step=-1) * case.I_MAX * case.DS / case.DE + case.E6G[-1]
-    #     ub = np.vstack((ub_max_ele, ub_imax_start, ub_imax_end)).min(axis=0)
-    #     # lower bound likewise
-    #     lb_min_ele = np.ones_like(case.E6G[1:-1]) * case.E6G.min()
-    #     lb_imax_start = np.arange(start=0, stop=case.NUM_S) * - case.I_MAX * (case.DS / case.DE) + case.E6G[0]
-    #     lb_imax_end = np.arange(start=case.NUM_S - 1, stop=-1, step=-1) * - case.I_MAX * (case.DS / case.DE) + case.E6G[-1]
-    #     lb = np.vstack((lb_min_ele, lb_imax_start, lb_imax_end)).max(axis=0)
-
-
-    pass
+    e = variables['e']
+    lb1, ub1 = ground.get_absolute_e_range()
+    lb2, ub2 = ground.get_envelope()
+    for s in range(ground.num_s + 2):
+        model.addConstr(e[s] >= lb1[s], name=f"vao-VI_lb1[{s}]")
+        model.addConstr(e[s] >= lb2[s], name=f"vao-VI_lb2[{s}]")
+        model.addConstr(e[s] <= ub1[s], name=f"vao-VI_ub1[{s}]")
+        model.addConstr(e[s] <= ub2[s], name=f"vao-VI_ub1[{s}]")
+    return
 
 
 def add_tc_constraints(model: gp.Model,
                        ground: Ground,
                        train: Train,
                        variables: dict[str, gp.Var],
-                       vao_variables: dict[str, gp.Var | np.array],
+                       vao_variables: dict[str, gp.Var | np.ndarray],
                        is_uphill_dir: bool = True
                        ):
     S = ground.num_s
@@ -266,14 +260,19 @@ def add_tc_constraints(model: gp.Model,
     model.addConstrs((E_k[i] <= ground.ek_lim[i, 1] for i in range(2, S + 1)), name=f'tc_Ek^{upd}')
 
     #    T_max
-    t_max = ground.TU_MAX if is_uphill_dir else ground.TD_MAX
+    t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
     model.addConstr(t.sum() <= t_max, name=f"tc_T^{upd}")
     pass
 
 
-def add_tc_valid_inequalities(model: gp.Model, ground: Ground, variables: dict[str, gp.Var], is_uphill_dir: bool):
+def add_tc_valid_inequalities(
+        model: gp.Model,
+        ground: Ground,
+        train: Train,
+        variables: dict[str, gp.Var],
+        is_uphill_dir: bool):
     # section running time restriction
-    t_max = ground.TU_MAX if is_uphill_dir else ground.TD_MAX
+    t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
     upd = "u" if is_uphill_dir else "d"
     model.addConstrs(variables['t'].sum() >= t_max - 1, name=f"tc-VI_{upd}")
     return
@@ -281,7 +280,8 @@ def add_tc_valid_inequalities(model: gp.Model, ground: Ground, variables: dict[s
 
 class OptimizationModel:
     def __init__(self, name: str, ground: Ground, train: Train = None):
-        self.name: str = f"{ground.name}__{train.name}__{name}"  # vao, eetc, sotc, eetc-vao, ...
+        train_name = "" if train is None else train.name
+        self.name: str = f"{ground.name}__{train_name}__{name}"  # vao, eetc, sotc, eetc-vao, ...
         self.model: gp.Model = gp.Model(name)
         self.ground: Ground = ground
         self.train: Train = train
@@ -300,7 +300,7 @@ class OptimizationModel:
 
     def add_vars(self, variable_group_name: str, add_variables_func: Callable, **kwargs):
         self.variable_groups[variable_group_name] = {}
-        variables = add_variables_func(model=self.model, cp=self.cp, **kwargs)
+        variables = add_variables_func(model=self.model, **kwargs)
         if variable_group_name not in ['vao', 'tc_u', 'tc_d']:
             raise KeyError("variable_group_name must be in 'vao', 'tc_u', 'tc_d'. ")
         variable_names = self._vao_variable_names if variable_group_name == "vao" else self._tc_variable_names
@@ -309,14 +309,14 @@ class OptimizationModel:
         return
 
     def add_constrs(self, variable_group_name: str, add_constrs_func: Callable, **kwargs):
-        add_constrs_func(model=self.model, cp=self.cp, variables=self.variable_groups[variable_group_name], **kwargs)
+        add_constrs_func(model=self.model, variables=self.variable_groups[variable_group_name], **kwargs)
         return
 
     def set_objectives(self, gurobi_linear_expression: gp.LinExpr):
         self.model.setObjective(gurobi_linear_expression)
         return
 
-    def set_warm_start(self, warm_start_model: dict | "OptimizationModel"):
+    def set_warm_start(self, warm_start_model: Union[dict, "OptimizationModel"]):
         if warm_start_model is None:
             return
         if isinstance(warm_start_model, OptimizationModel):
@@ -360,7 +360,7 @@ class OptimizationModel:
 
     def get_brief_results_decorated_txt(self):
         txt = ""
-        txt += '>>' * 20 + f' {self.case_name} result - {self.name} ' + '<<' * 20 + '\n'
+        txt += '>>' * 20 + f' {self.name} ' + '<<' * 20 + '\n'
 
         if "vao" in self.variable_groups.keys():
             txt += '>>' * 10 + f' vao results ' + '<<' * 10 + '\n'
@@ -373,25 +373,26 @@ class OptimizationModel:
             txt += f"constructionCost:\t{Cc}\n"
             txt += '>>' * 10 + f' vao results ' + '<<' * 10 + '\n'
 
-        operation_cost_total = 0
-        _multiplier = self.cp.E_U * self.cp.M_T * self.cp.GRAVITY * self.cp.DS / self.cp.ETA
-        for direction in ['_u', '_d']:
-            tc_dir = f"tc{direction}"
-            NumTrainsRunning_dir = self.cp.N_TR_UP if direction == '_u' else self.cp.N_TR_DOWN
-            if tc_dir in self.variable_groups.keys():
-                txt += '>>' * 10 + f' {tc_dir} results ' + '<<' * 10 + '\n'
-                sectionRunningTime = self.variable_groups[tc_dir]['t'].sum().getValue()
-                txt += f"T{direction}:\t{sectionRunningTime}\n"
-                tractionCostPerTrain = _multiplier * self.variable_groups[tc_dir]['kappa'].sum().getValue()
-                auxiliaryCostPerTrain = self.cp.MU * sectionRunningTime
-                txt += f"tractionCostPerTrain{direction}: \t{tractionCostPerTrain}\n"
-                txt += f"auxiliaryCostPerTrain{direction}: \t{auxiliaryCostPerTrain}\n"
-                txt += f"No.TrainsRunning{direction}: \t{NumTrainsRunning_dir}\n"
-                operation_cost_total += NumTrainsRunning_dir * self.cp.LAMBDA \
-                                        * (tractionCostPerTrain + auxiliaryCostPerTrain)
-                txt += '>>' * 10 + f' {tc_dir} results ' + '<<' * 10 + '\n'
-        txt += f"operationCostTotal: \t{operation_cost_total}\n"
-        txt += '>>' * 20 + f' {self.case_name} result - {self.name} ' + '<<' * 20 + '\n'
+        if len(self.variable_groups) > 1:
+            operation_cost_total = 0
+            _multiplier = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
+            for direction in ['_u', '_d']:
+                tc_dir = f"tc{direction}"
+                NumTrainsRunning_dir = self.ground.N_tr_up if direction == '_u' else self.ground.N_tr_down
+                if tc_dir in self.variable_groups.keys():
+                    txt += '>>' * 10 + f' {tc_dir} results ' + '<<' * 10 + '\n'
+                    sectionRunningTime = self.variable_groups[tc_dir]['t'].sum().getValue()
+                    txt += f"T{direction}:\t{sectionRunningTime}\n"
+                    tractionCostPerTrain = _multiplier * self.variable_groups[tc_dir]['kappa'].sum().getValue()
+                    auxiliaryCostPerTrain = self.train.mu * sectionRunningTime
+                    txt += f"tractionCostPerTrain{direction}: \t{tractionCostPerTrain}\n"
+                    txt += f"auxiliaryCostPerTrain{direction}: \t{auxiliaryCostPerTrain}\n"
+                    txt += f"No.TrainsRunning{direction}: \t{NumTrainsRunning_dir}\n"
+                    operation_cost_total += NumTrainsRunning_dir * CONST['lambda'] \
+                                            * (tractionCostPerTrain + auxiliaryCostPerTrain)
+                    txt += '>>' * 10 + f' {tc_dir} results ' + '<<' * 10 + '\n'
+            txt += f"operationCostTotal: \t{operation_cost_total}\n"
+        txt += '>>' * 20 + f' {self.name} ' + '<<' * 20 + '\n'
         return txt
 
     def get_detail_results_decorated_txt(self):
@@ -445,7 +446,7 @@ class OptimizationModel:
         S = self.ground.num_s
         if "vao" in self.variable_groups.keys():
             e = np.array([self.variable_groups['vao']['e'][i].X for i in range(0, S + 2)])
-            pi = np.array([self.variable_groups['vao']['pi'][i].X for i in range(0, S + 2)])
+            pi = np.array([self.variable_groups['vao']['pi'][i].X for i in range(1, S + 1)])
             track = Track(e=e, pi=pi, ground=self.ground)
             fig = track.plot_ground_track()
             fig.savefig(self.directory + f"\\{self.name}-track_profile.pdf", dpi=600)
@@ -468,7 +469,33 @@ class OptimizationModel:
         return
 
 
+class VAO(OptimizationModel):
+    def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True):
+        super().__init__(name="vao", ground=ground, train=None)
+        self.add_vars(variable_group_name="vao", add_variables_func=add_vao_variables, ground=self.ground)
+        self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_constraints, ground=self.ground)
+
+        if LC_ON:
+            self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_logic_cuts, ground=self.ground)
+        if VI_on:
+            self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_valid_inequalities, ground=self.ground)
+
+        obj_exp = gp.LinExpr()
+        obj_exp += gp.quicksum(self.variable_groups['vao']['C'][s] + self.variable_groups['vao']['C6tn_e'][s]
+                               for s in range(1, self.ground.num_s + 1))
+        self.set_objectives(gurobi_linear_expression=obj_exp)
+
+        return
+
+    def optimize(self, **kwargs):
+        super().optimize(
+            IntegralityFocus=1, NumericFocus=1, Cuts=2, IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs)
+        return
+
+
 def main():
+    vao = VAO(ground=Ground("gd2"))
+    vao.optimize()
     pass
 
 

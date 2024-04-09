@@ -3,10 +3,26 @@
         "theta": 20,
         "ds": 100, 
         "de": 1,
-        "TD_MAX": 1840, 
-        "TU_MAX": 1840,
-        "TD_MIN": 1600, 
-        "TU_MIN": 1600,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 1840,
+                "TU_MAX": 1840,
+                "TD_MIN": 1600,
+                "TU_MIN": 1600
+            },
+            "HXD1D": {
+                "TD_MAX": 1840,
+                "TU_MAX": 1840,
+                "TD_MIN": 1600,
+                "TU_MIN": 1600
+            },
+            "HXD2": {
+                "TD_MAX": 1840,
+                "TU_MAX": 1840,
+                "TD_MIN": 1600,
+                "TU_MIN": 1600
+            }
+        },
         "v_lim": [[0,200]],
         "curve": [],
         "point_arr_file": "GaoYan-DMX-modified.csv",

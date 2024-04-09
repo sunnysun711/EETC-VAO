@@ -29,8 +29,8 @@ def get_track_type(e6g: np.array, e: np.array, ht_min: float, hb_min: float):
 
 class Track:
     def __init__(self, e: np.array, pi: np.array = None, ground: Ground = None) -> None:
-        self.e: np.array = e
-        self.pi: np.array = pi
+        self.e: np.array = e  # shape (S+2, )
+        self.pi: np.array = pi  # shape (S, )
         self.ground: Ground = ground
 
         pass
@@ -44,7 +44,10 @@ class Track:
         return ground_stair_points, np.array([track_x, track_y])
 
     def plot_ground_track(self) -> plt.Figure:
-        track_type = get_track_type(e6g=self.ground.e6g, e=self.e, hb_min=self.ground.hb_min, ht_min=self.ground.ht_min)
+        track_type = get_track_type(
+            e6g=self.ground.e6g * self.ground.de,
+            e=self.e * self.ground.de,
+            hb_min=self.ground.hb_min, ht_min=self.ground.ht_min)
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 5), dpi=150)
         ground_stair_points, track_stair_points = self.get_stair_plot_data()
@@ -53,9 +56,9 @@ class Track:
         # legend of the figure
         legend_elements = [Line2D([0], [0], color="lightgray", lw=1, label='Ground'),
                            Line2D([0], [0], color="black", lw=1, label='Track')]
-        align_type_colors = {'cut': 'b', 'fill': 'r', 'tn': 'g', 'bg': 'y'}
+        track_type_colors: dict[str, str] = {'cut': 'b', 'fill': 'r', 'tn': 'g', 'bg': 'y'}
         for key in track_type.keys():
-            cl = align_type_colors[key]
+            cl = track_type_colors[key]
             if len(track_type[key]) == 0:
                 continue
             data = track_type[key][:, 0].astype(int)
@@ -67,10 +70,10 @@ class Track:
                                 facecolor=cl,
                                 alpha=0.5)
         # add shades legend
-        legend_elements.extend([Patch(facecolor=align_type_colors['cut'], alpha=0.5, label='Earth cut'),
-                                Patch(facecolor=align_type_colors['fill'], alpha=0.5, label='Earth fill'),
-                                Patch(facecolor=align_type_colors['tn'], alpha=0.5, label='Tunnel'),
-                                Patch(facecolor=align_type_colors['bg'], alpha=0.5, label='Bridge')])
+        legend_elements.extend([Patch(facecolor=track_type_colors['cut'], alpha=0.5, label='Earth cut'),
+                                Patch(facecolor=track_type_colors['fill'], alpha=0.5, label='Earth fill'),
+                                Patch(facecolor=track_type_colors['tn'], alpha=0.5, label='Tunnel'),
+                                Patch(facecolor=track_type_colors['bg'], alpha=0.5, label='Bridge')])
         ax.legend(handles=legend_elements)
         ax.set_xlabel("Horizontal Location")
         ax.set_ylabel("Elevation")
