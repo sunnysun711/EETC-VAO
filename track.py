@@ -28,12 +28,12 @@ def get_track_type(e6g: np.array, e: np.array, ht_min: float, hb_min: float):
 
 
 class Track:
-    def __init__(self, e: np.array, pi: np.array = None, ground: Ground = None) -> None:
-        self.e: np.array = e  # shape (S+2, )
-        self.pi: np.array = pi  # shape (S, )
+    def __init__(self, e: np.ndarray, pi: np.ndarray = None, z1: np.ndarray = None, ground: Ground = None) -> None:
+        self.e: np.ndarray = e  # shape (S+2, ), index: [0, S+1]
+        self.pi: np.ndarray = pi  # shape (S, ), index: [1, S]
+        self.z1: np.ndarray = z1  # shape (S+1, ), index: [1, S+1]
         self.ground: Ground = ground
-
-        pass
+        return
 
     def get_stair_plot_data(self) -> tuple[np.array, np.array]:
         ground_stair_points = self.ground.get_stair_plot_data()
@@ -49,7 +49,7 @@ class Track:
             e=self.e * self.ground.de,
             hb_min=self.ground.hb_min, ht_min=self.ground.ht_min)
 
-        fig, ax = plt.subplots(1, 1, figsize=(14, 5), dpi=150)
+        fig, ax = plt.subplots(1, 1, figsize=(8, 3), dpi=150)
         ground_stair_points, track_stair_points = self.get_stair_plot_data()
         ax.plot(ground_stair_points[0], ground_stair_points[1], lw=0.5, label="ground", c="lightgray")
         ax.plot(track_stair_points[0], track_stair_points[1], lw=0.5, label="track", c="black")
@@ -74,15 +74,17 @@ class Track:
                                 Patch(facecolor=track_type_colors['fill'], alpha=0.5, label='Earth fill'),
                                 Patch(facecolor=track_type_colors['tn'], alpha=0.5, label='Tunnel'),
                                 Patch(facecolor=track_type_colors['bg'], alpha=0.5, label='Bridge')])
-        ax.legend(handles=legend_elements)
-        ax.set_xlabel("Horizontal Location")
-        ax.set_ylabel("Elevation")
+        ax.legend(handles=legend_elements, fontsize="small")
+        ax.set_xlabel("Horizontal location (m)", fontsize="small")
+        ax.set_ylabel("Elevation (m)", fontsize="small")
+        plt.tight_layout()
         plt.show()
         return fig
 
 
 def main():
-    ground = Ground("gd_gaoyan", "real")
+    # ground = Ground("gd_gaoyan", "real")
+    ground = Ground("gd2", "random")
     # print(ground.e6g)
     # e = ground.e6g.copy() + np.random.rand(ground.num_s + 2) * 100 - 50
     # e[0], e[-1] = ground.e6g[0], ground.e6g[-1]

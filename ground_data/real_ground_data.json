@@ -36,7 +36,8 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": null
     }
 }

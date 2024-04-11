@@ -1,8 +1,8 @@
 {
     "gd0": {
         "name": "gd0",
-        "distance": 10000,
-        "elevation": 1500,
+        "distance": 100000,
+        "elevation": 2000,
         "n_vpi": 120,
         "n_smooth": 10,
         "seed": null,
@@ -13,7 +13,7 @@
         "de": 0.1,
         "running_time_fluc": 10,
         "v_lim": [ [ 0, 200 ] ],
-        "curve": [ [] ],
+        "curve": [ ],
         "i_max": 0.03,
         "di_max": 0.018,
         "hb_min": 10,
@@ -24,8 +24,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": null
     },
     "gd1": {
         "name": "gd1",
@@ -80,8 +81,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": null
     },
     "gd2": {
         "name": "gd2",
@@ -136,8 +138,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 12
     },
     "gd3": {
         "name": "gd3",
@@ -192,8 +195,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 15
     },
     "gd4": {
         "name": "gd4",
@@ -248,8 +252,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
     },
     "gd5": {
         "name": "gd5",
@@ -304,8 +309,9 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
     },
     "gd6": {
         "name": "gd6",
@@ -360,7 +366,8 @@
         "c_bg": 82000,
         "c_tn": 80000,
         "c6e_tn": 500000,
-        "N_tr_up": 547500,
-        "N_tr_down": 547500
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
     }
 }
