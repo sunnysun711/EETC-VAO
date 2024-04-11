@@ -1,8 +1,8 @@
 import os
-from typing import Any, Callable, Union
+from typing import Callable, Union
 
-import numpy as np
 import gurobipy as gp
+import numpy as np
 from gurobipy import GRB
 from matplotlib import pyplot as plt
 
@@ -35,40 +35,6 @@ def add_vao_variables(model: gp.Model, ground: Ground) -> list[gp.Var]:
     z5 = model.addVars(range(1, S + 1), vtype=GRB.BINARY, name='z5')
 
     return [e, pi, C, C6tn_e, gamma, z1, z2, z3, z4, z5]
-
-
-def add_tc_variables(
-        model: gp.Model,
-        ground: Ground,
-        train: Train,
-        is_uphill_dir: bool = True
-) -> list[gp.Var]:
-    upd = "u" if is_uphill_dir else "d"
-    S = ground.num_s
-    I_MAX = ground.i_max
-    traction_e: np.array = train.traction_e
-    brake_e: np.array = train.brake_e
-    max_traction = traction_e[:, 1].max()
-    max_brake = brake_e[:, 1].max()
-    max_resist = train.max_resist
-    max_control = max(max_traction, max_brake)
-    max_Ek = traction_e[:, 0].max()
-
-    u = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-max_brake, ub=max_traction, name=f"u^{upd}")
-    kappa = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_control, name=f"kappa^{upd}")
-    E_k = model.addVars(range(1, S + 2), vtype=GRB.CONTINUOUS, lb=0, ub=max_Ek, name=f"E_k^{upd}")
-    f_tra = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_traction, name=f"f_tra^{upd}")
-    f_bra = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_brake, name=f"f_bra^{upd}")
-    omega_0 = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, ub=max_resist, name=f'omega_0^{upd}')
-    omega_i = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-I_MAX * 1000, ub=I_MAX * 1000,
-                            name=f'omega_i^{upd}')
-    omega_r = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, name=f'omega_r^{upd}')
-    omega_tn = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f'omega_tn^{upd}')
-    c = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-100, name=f'c^{upd}')
-    t = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f't^{upd}')
-    f_pwa_v = model.addVars(range(2, S + 1), vtype=GRB.CONTINUOUS, name=f'f_PWA_v^{upd}')
-
-    return [u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v]
 
 
 def add_vao_constraints(model: gp.Model, ground: Ground, variables: dict[str, gp.Var]) -> None:
@@ -169,14 +135,52 @@ def add_vao_logic_cuts(model: gp.Model, ground: Ground, variables: dict[str, gp.
 
 def add_vao_valid_inequalities(model: gp.Model, ground: Ground, variables: dict[str, gp.Var]):
     e = variables['e']
-    lb1, ub1 = ground.get_absolute_e_range()
-    lb2, ub2 = ground.get_envelope()
+    lb, ub = ground.get_absolute_e_range()
+    le, ue = ground.get_envelope()
     for s in range(ground.num_s + 2):
-        model.addConstr(e[s] >= lb1[s], name=f"vao-VI_lb1[{s}]")
-        model.addConstr(e[s] >= lb2[s], name=f"vao-VI_lb2[{s}]")
-        model.addConstr(e[s] <= ub1[s], name=f"vao-VI_ub1[{s}]")
-        model.addConstr(e[s] <= ub2[s], name=f"vao-VI_ub1[{s}]")
+        # determine the actual range of e
+        e_s_min, e_s_max = lb[s], ub[s]
+        if (ue[s] < e_s_max) & (ue[s] > e_s_min):
+            e_s_max = ue[s]
+        if (le[s] < e_s_max) & (le[s] > e_s_min):
+            e_s_min = le[s]
+        model.addConstr(e[s] >= e_s_min, name=f"vao-VI_lower[{s}]")
+        model.addConstr(e[s] <= e_s_max, name=f"vao-VI_upper[{s}]")
     return
+
+
+def add_tc_variables(
+        model: gp.Model,
+        ground: Ground,
+        train: Train,
+        is_uphill_dir: bool = True
+) -> list[gp.Var]:
+    upd = "u" if is_uphill_dir else "d"
+    S = ground.num_s
+    I_MAX = ground.i_max
+    traction_e: np.array = train.traction_e
+    brake_e: np.array = train.brake_e
+    max_traction = traction_e[:, 1].max()
+    max_brake = brake_e[:, 1].max()
+    max_resist = train.max_resist
+    max_control = max(max_traction, max_brake)
+    max_Ek = traction_e[:, 0].max()
+
+    u = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-max_brake, ub=max_traction, name=f"u^{upd}")
+    kappa = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_control, name=f"kappa^{upd}")
+    E_k = model.addVars(range(1, S + 2), vtype=GRB.CONTINUOUS, lb=0, ub=max_Ek, name=f"E_k^{upd}")
+    f_tra = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_traction, name=f"f_tra^{upd}")
+    f_bra = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, ub=max_brake, name=f"f_bra^{upd}")
+    omega_0 = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, ub=max_resist, name=f'omega_0^{upd}')
+    omega_i = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-I_MAX * 1000, ub=I_MAX * 1000,
+                            name=f'omega_i^{upd}')
+    omega_r = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, name=f'omega_r^{upd}')
+    omega_tn = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f'omega_tn^{upd}')
+    c = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-100, name=f'c^{upd}')
+    t = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f't^{upd}')
+    f_pwa_v = model.addVars(range(2, S + 1), vtype=GRB.CONTINUOUS, name=f'f_PWA_v^{upd}')
+
+    return [u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v]
 
 
 def add_tc_constraints(model: gp.Model,
@@ -243,11 +247,12 @@ def add_tc_constraints(model: gp.Model,
     #    train motion
     _multiplier = 2 * ground.ds * 3.6 ** 2 / ((1 + train.rho) * 102)
     _multiplier2 = 1 if is_uphill_dir else -1
-    model.addConstrs((E_k[i] - E_k[i + 1] == _multiplier2 * _multiplier * c[i] for i in range(1, S + 1)))
+    model.addConstrs((E_k[i] - E_k[i + 1] == _multiplier2 * _multiplier * c[i] for i in range(1, S + 1)),
+                     name=f'tc-train_motion^{upd}')
 
     #     piecewise linear function to affine the f_t
     for i in range(2, S + 1):
-        model.addGenConstrPWL(E_k[i], f_pwa_v[i], train.PWL_EK.tolist(), train.PWL_F_EK.tolist(),
+        model.addGenConstrPWL(E_k[i], f_pwa_v[i], train.PWL_EK, train.PWL_F_EK,
                               name=f"tc_pwl_t^{upd}[{i}]")
 
     #    running time
@@ -270,15 +275,21 @@ def add_tc_valid_inequalities(
         ground: Ground,
         train: Train,
         variables: dict[str, gp.Var],
-        is_uphill_dir: bool):
+        vao_variables=None,
+        is_uphill_dir: bool = True):
     # section running time restriction
     t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
     upd = "u" if is_uphill_dir else "d"
-    model.addConstrs(variables['t'].sum() >= t_max - 1, name=f"tc-VI_{upd}")
+    model.addConstr(variables['t'].sum() >= t_max - 1, name=f"tc-VI_{upd}")
     return
 
 
 class OptimizationModel:
+    """
+    input name, get self.name = f"{ground.name}__{train_name}__{name}"
+        e.g. gd_gaoyan__CRH380AL__vao_LC_VI, gd_gaoyan__CRH380AL__eetc_tcVI, gd2__HXD2__eetc-vao_LC_VI_tc_VI
+    """
+
     def __init__(self, name: str, ground: Ground, train: Train = None):
         train_name = "" if train is None else train.name
         self.name: str = f"{ground.name}__{train_name}__{name}"  # vao, eetc, sotc, eetc-vao, ...
@@ -289,7 +300,7 @@ class OptimizationModel:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
 
-        self.log_file_path = f"{self.directory}\\{name}.log"
+        self.log_file_path = f"{self.directory}\\{self.name}.log"
 
         # dictionaries of dictionaries. {var_group_name: {name: variable, ...}, ...}
         self.variable_groups = {}  # vao, tc_u, tc_d
@@ -298,9 +309,10 @@ class OptimizationModel:
                                    "c", "t", "f_pwa_v"]
         return
 
-    def add_vars(self, variable_group_name: str, add_variables_func: Callable, **kwargs):
+    def add_vars(self, variable_group_name: str = None, variable_function: Callable = None, **kwargs):
+        """add variables to the model, and save variable in self.variable_groups (dict)"""
         self.variable_groups[variable_group_name] = {}
-        variables = add_variables_func(model=self.model, **kwargs)
+        variables = variable_function(model=self.model, ground=self.ground, **kwargs)
         if variable_group_name not in ['vao', 'tc_u', 'tc_d']:
             raise KeyError("variable_group_name must be in 'vao', 'tc_u', 'tc_d'. ")
         variable_names = self._vao_variable_names if variable_group_name == "vao" else self._tc_variable_names
@@ -308,36 +320,36 @@ class OptimizationModel:
             self.variable_groups[variable_group_name][var_name] = variable
         return
 
-    def add_constrs(self, variable_group_name: str, add_constrs_func: Callable, **kwargs):
-        add_constrs_func(model=self.model, variables=self.variable_groups[variable_group_name], **kwargs)
-        return
+    def add_variables(self, **kwargs):
+        pass
+
+    def add_constraints(self, **kwargs):
+        pass
 
     def set_objectives(self, gurobi_linear_expression: gp.LinExpr):
         self.model.setObjective(gurobi_linear_expression)
         return
 
-    def set_warm_start(self, warm_start_model: Union[dict, "OptimizationModel"]):
-        if warm_start_model is None:
+    def set_warm_start(self, warm_start_data: dict[str, dict[str, gp.Var | float | int]]):
+        if warm_start_data is None:
             return
-        if isinstance(warm_start_model, OptimizationModel):
-            for grp, variables in warm_start_model.variable_groups.items():
-                for var_name, variable in variables.items():
-                    for i in variable.keys():
-                        self.variable_groups[grp][var_name][i].Start = variable[i].X
+        for grp, grp_variables in warm_start_data.items():
+            for var_name, variables in grp_variables.items():
+                for var_key in variables.keys():
+                    to_assign = variables[var_key]
+                    if isinstance(to_assign, gp.Var):
+                        to_assign = to_assign.X
+                    elif isinstance(to_assign, (int, float)):
+                        pass
+                    else:
+                        raise ValueError("warm_start_data should only contain integers, floats, or gp.Var.")
+                    self.variable_groups[grp][var_name][var_key].Start = to_assign
 
-                        ## add absolute range for debugging
-                        # self.model.addRange(
-                        #     self.variable_groups[grp][var_name][i], variable[i].X, variable[i].X,
-                        #     name=f"BOUND{grp}_{var_name}[{i}]")
+                    # # add absolute range for debugging
+                    # self.model.addRange(
+                    #     self.variable_groups[grp][var_name][var_key], to_assign, to_assign,
+                    #     name=f"BOUND{grp}_{var_name}[{var_key}]")
 
-        elif isinstance(warm_start_model, dict):  # result dict
-            for grp, variables in warm_start_model.items():
-                for var_name, variable in variables.items():
-                    for i in variable.keys():
-                        self.variable_groups[grp][var_name][i].Start = variable[i]
-        else:
-            raise ValueError("warm_start_model must be OptimizationModel or dict. ")
-        self.model.update()
         return
 
     def set_parameters(self, **kwargs):
@@ -348,7 +360,7 @@ class OptimizationModel:
             self.model.setParam(key, value)
         return
 
-    def optimize(self, callback_function: Callable = None, **kwargs):
+    def opt(self, callback_function: Callable = None, **kwargs):
         self.set_parameters(**kwargs)
         if callback_function is None:
             self.model.optimize()
@@ -378,7 +390,8 @@ class OptimizationModel:
             _multiplier = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
             for direction in ['_u', '_d']:
                 tc_dir = f"tc{direction}"
-                NumTrainsRunning_dir = self.ground.N_tr_up if direction == '_u' else self.ground.N_tr_down
+                NumTrainsRunning_dir = self.ground.N_tr_up[
+                    self.train.name] if direction == '_u' else self.ground.N_tr_down[self.train.name]
                 if tc_dir in self.variable_groups.keys():
                     txt += '>>' * 10 + f' {tc_dir} results ' + '<<' * 10 + '\n'
                     sectionRunningTime = self.variable_groups[tc_dir]['t'].sum().getValue()
@@ -404,11 +417,8 @@ class OptimizationModel:
                     f"{var.UB}, ObjCoefficient: {var.Obj}, value: {var.X}\n")
         txt += ">>" * 10 + f' CONSTRAINTS ' + '<<' * 10 + '\n'
         for constr in self.model.getConstrs():
-            # 获取约束的左侧表达式
-            expr = self.model.getRow(constr)
-
-            # 初始化左侧表达式的值
-            lhs_value = 0
+            expr = self.model.getRow(constr)  # 获取约束的左侧表达式
+            lhs_value = 0  # 初始化左侧表达式的值
 
             # 遍历表达式中的所有项
             for i in range(expr.size()):
@@ -423,14 +433,13 @@ class OptimizationModel:
 
     def save_optimization_info(self, print_out: bool = True):
         save_name = os.path.join(self.directory, f"{self.name}")
-        # save results in mps, lp, ilp, json files
         self.model.write(f"{save_name}.mps")
         self.model.write(f"{save_name}.lp")
         if self.model.Status == GRB.INFEASIBLE:
             self.model.computeIIS()
             self.model.write(f"{save_name}.ilp")
-        else:  # solution file
-            self.model.write(f"{save_name}.json")
+        else:
+            self.model.write(f"{save_name}.json")  # solution file
 
         # append into log files
         with open(self.log_file_path, "a") as f:
@@ -443,59 +452,220 @@ class OptimizationModel:
         return
 
     def plot_results(self):
-        S = self.ground.num_s
-        if "vao" in self.variable_groups.keys():
-            e = np.array([self.variable_groups['vao']['e'][i].X for i in range(0, S + 2)])
-            pi = np.array([self.variable_groups['vao']['pi'][i].X for i in range(1, S + 1)])
-            track = Track(e=e, pi=pi, ground=self.ground)
-            fig = track.plot_ground_track()
-            fig.savefig(self.directory + f"\\{self.name}-track_profile.pdf", dpi=600)
-
-        if "tc_u" in self.variable_groups.keys() or "tc_d" in self.variable_groups.keys():
-            # plot velocity and control
-            distances = np.arange(1, S + 2) * self.ground.ds
-            plt.figure(figsize=(12, 8))
-            ax1 = plt.subplot(211)
-            ax2 = plt.subplot(212, sharex=ax1)
-            for dr in ['_u', '_d']:
-                tip_shape = 'x' if dr == "_u" else "o"
-                v_arr = np.sqrt([self.variable_groups[f"tc{dr}"]['E_k'][i].X for i in range(1, S + 2)])
-                ax1.plot(distances, v_arr, f"{tip_shape}-", label=f"v{dr}")
-                u_arr = np.array([self.variable_groups[f'tc{dr}']['u'][i].X for i in range(1, S + 1)])
-                ax2.plot(distances[:-1], u_arr, f"{tip_shape}-", label=f"u{dr}")
-            ax1.legend()
-            ax2.legend()
-            plt.savefig(self.directory + f"\\{self.name}-speed_profile.pdf", dpi=600)
+        """Plot the results of either vao or tc or both"""
         return
 
 
 class VAO(OptimizationModel):
     def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True):
-        super().__init__(name="vao", ground=ground, train=None)
-        self.add_vars(variable_group_name="vao", add_variables_func=add_vao_variables, ground=self.ground)
-        self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_constraints, ground=self.ground)
-
+        name = "vao"
         if LC_ON:
-            self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_logic_cuts, ground=self.ground)
+            name += "_LC"
         if VI_on:
-            self.add_constrs(variable_group_name="vao", add_constrs_func=add_vao_valid_inequalities, ground=self.ground)
+            name += "_VI"
+        super().__init__(name=name, ground=ground, train=None)
+        self.add_variables()
+
+        self.add_constraints(constraint_func=add_vao_constraints)
+        if LC_ON:
+            self.add_constraints(constraint_func=add_vao_logic_cuts)
+        if VI_on:
+            self.add_constraints(constraint_func=add_vao_valid_inequalities)
 
         obj_exp = gp.LinExpr()
-        obj_exp += gp.quicksum(self.variable_groups['vao']['C'][s] + self.variable_groups['vao']['C6tn_e'][s]
-                               for s in range(1, self.ground.num_s + 1))
+        obj_exp += gp.quicksum(
+            self.variable_groups['vao']['C'][s] +
+            self.variable_groups['vao']['C6tn_e'][s]
+            for s in range(1, self.ground.num_s + 1)
+        )
         self.set_objectives(gurobi_linear_expression=obj_exp)
-
+        self.ground.plot_ground_with_envelope().savefig(
+            f"{self.directory}\\{self.name}-ground_profile.pdf", dpi=600
+        )
         return
 
-    def optimize(self, **kwargs):
-        super().optimize(
-            IntegralityFocus=1, NumericFocus=1, Cuts=2, IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs)
+    def add_variables(self):
+        super().add_vars(
+            variable_group_name="vao", variable_function=add_vao_variables)
         return
+
+    def add_constraints(self, constraint_func: Callable):
+        constraint_func(
+            model=self.model, ground=self.ground,
+            variables=self.variable_groups["vao"])
+        return
+
+    def optimize(self, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+        super().opt(
+            IntegralityFocus=IntegralityFocus,
+            NumericFocus=NumericFocus,
+            Cuts=Cuts,
+            IntFeasTol=IntFeasTol,
+            MIPGap=MIPGap,
+            TimeLimit=TimeLimit,
+            **kwargs)
+        return
+
+    def get_track(self) -> Track:
+        if self.model.Status != 2:
+            raise Exception("Model is not solved!")
+        e = np.array([_.X for _ in self.variable_groups['vao']['e'].values()])
+        pi = np.array([_.X for _ in self.variable_groups['vao']['pi'].values()])
+        z1 = np.array([_.X for _ in self.variable_groups['vao']['z1'].values()])
+        track = Track(e=e, pi=pi, z1=z1, ground=self.ground)
+        return track
+
+    def plot_results(self):
+        track = self.get_track()
+        fig = track.plot_ground_track()
+        fig.savefig(self.directory + f"\\{self.name}-track_profile.pdf", dpi=600)
+        return
+
+
+class TC(OptimizationModel):
+    def __init__(self, train: Train, track: Track, is_ee: bool = True, tcVI_on: bool = True,
+                 warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None):
+        name = "eetc" if is_ee else "sotc"
+        tcVI_on = tcVI_on if is_ee else False
+        if tcVI_on:
+            name += "_tcVI"
+        if warm_start_data is not None:
+            name += "_WS"
+        super().__init__(name=name, ground=track.ground, train=train)
+        self.add_variables()
+
+        vao_variables: dict[str, np.ndarray] = {"e": track.e, "z1": track.z1}
+        self.add_constraints(
+            constraint_func=add_tc_constraints, vao_variables=vao_variables)
+        if tcVI_on:
+            self.add_constraints(
+                constraint_func=add_tc_valid_inequalities, vao_variables=vao_variables)
+
+        obj_exp = gp.LinExpr()
+        _pr_obj = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
+        n_tr_up = self.ground.N_tr_up[self.train.name]
+        n_tr_down = self.ground.N_tr_down[self.train.name]
+        # auxiliary energy cost
+        obj_exp += gp.quicksum(self.variable_groups['tc_u']['t']) * self.train.mu * n_tr_up
+        obj_exp += gp.quicksum(self.variable_groups['tc_d']['t']) * self.train.mu * n_tr_down
+        # traction energy cost
+        if is_ee:
+            obj_exp += gp.quicksum(self.variable_groups['tc_u']['kappa']) * _pr_obj * n_tr_up
+            obj_exp += gp.quicksum(self.variable_groups['tc_d']['kappa']) * _pr_obj * n_tr_down
+        obj_exp = obj_exp * CONST['lambda']
+        self.model.setObjective(obj_exp, GRB.MINIMIZE)
+        self.set_warm_start(warm_start_data)
+        pass
+
+    def add_variables(self):
+        super().add_vars(
+            variable_group_name="tc_u",
+            variable_function=add_tc_variables,
+            train=self.train,
+            is_uphill_dir=True)
+        super().add_vars(
+            variable_group_name="tc_d",
+            variable_function=add_tc_variables,
+            train=self.train,
+            is_uphill_dir=False)
+        return
+
+    def add_constraints(self, constraint_func: Callable, vao_variables: dict[str, gp.Var | np.ndarray] = None):
+        """adding constraints in both uphill and downhill directions"""
+        constraint_func(
+            model=self.model,
+            ground=self.ground,
+            train=self.train,
+            variables=self.variable_groups["tc_u"],
+            vao_variables=vao_variables,
+            is_uphill_dir=True
+        )
+        constraint_func(
+            model=self.model,
+            ground=self.ground,
+            train=self.train,
+            variables=self.variable_groups["tc_d"],
+            vao_variables=vao_variables,
+            is_uphill_dir=False
+        )
+        return
+
+    def optimize(self, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+        super().opt(
+            IntegralityFocus=IntegralityFocus,
+            NumericFocus=NumericFocus,
+            Cuts=Cuts,
+            IntFeasTol=IntFeasTol,
+            MIPGap=MIPGap,
+            TimeLimit=TimeLimit,
+            **kwargs)
+        return
+
+    def plot_results(self):
+        """Plot the results of either vao or tc or both"""
+        S = self.ground.num_s
+        distances = (np.arange(0, S + 1) * self.ground.ds +
+                     self.ground.bottom_left_corner_coordinates[0])
+        plt.figure(figsize=(8, 4))
+        ax1 = plt.subplot(211)
+        ax2 = plt.subplot(212, sharex=ax1)
+        for dr in ['_u', '_d']:
+            tip_shape = 'x' if dr == "_u" else "o"
+            v_arr = np.sqrt(
+                [self.variable_groups[f"tc{dr}"]['E_k'][i].X for i in range(1, S + 2)])
+            ax1.plot(distances, v_arr, f"{tip_shape}-", label=f"v{dr}")
+            u_arr = np.array(
+                [self.variable_groups[f'tc{dr}']['u'][i].X for i in range(1, S + 1)])
+            ax2.plot(distances[:-1], u_arr, f"{tip_shape}-", label=f"u{dr}")
+        ax1.legend(fontsize="small")
+        ax1.set_ylabel("Velocity (km/h)", fontsize="small")
+        ax2.legend(fontsize="small")
+        ax2.set_xlabel("Horizontal location (m)", fontsize="small")
+        ax2.set_ylabel("Unit control force (N/kN)", fontsize="small")
+        plt.tight_layout()
+        plt.savefig(self.directory + f"\\{self.name}-speed_profile.pdf", dpi=600)
+        return
+
+
+class EETC_VAO(OptimizationModel):
+    def __init__(self,
+                 ground: Ground, train: Train,
+                 LC_ON: bool = True, VI_on: bool = True,
+                 tcVI_on: bool = True,
+                 warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None):
+        name = f"eetc-vao"
+        if LC_ON:
+            name += "_LC"
+        if VI_on:
+            name += "_VI"
+        if tcVI_on:
+            name += "_tcVI"
+        if warm_start_data is not None:
+            name += "_WS"
+        super().__init__(name, ground, train)
+        pass
+
+
+def get_all_ground_sotc():
+    pass
 
 
 def main():
-    vao = VAO(ground=Ground("gd2"))
+    vao = VAO(ground=Ground("gd2"), VI_on=False, LC_ON=False)
     vao.optimize()
+    vao2 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=False)
+    vao2.optimize()
+    vao3 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=True)
+    vao3.optimize()
+    track = vao.get_track()
+    sotc = TC(train=Train("CRH380AL"), track=track, is_ee=False)
+    sotc.optimize()
+    eetc1 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=False, warm_start_data=sotc.variable_groups)
+    eetc1.optimize()
+    eetc2 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=True)
+    eetc2.optimize()
     pass
 
 
