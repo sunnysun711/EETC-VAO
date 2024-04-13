@@ -264,9 +264,9 @@ def add_tc_constraints(model: gp.Model,
     model.addConstrs((E_k[i] == 0 for i in [1, S + 1]), name=f"tc_Ek^{upd}")
     model.addConstrs((E_k[i] <= ground.ek_lim[i, 1] for i in range(2, S + 1)), name=f'tc_Ek^{upd}')
 
-    #    T_max
-    t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
-    model.addConstr(t.sum() <= t_max, name=f"tc_T^{upd}")
+    # #    T_max
+    # t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
+    # model.addConstr(t.sum() <= t_max, name=f"tc_T^{upd}")
     pass
 
 
@@ -352,22 +352,26 @@ class OptimizationModel:
 
         return
 
-    def set_parameters(self, **kwargs):
+    def set_parameters(self, save_on: bool = True, **kwargs):
         # set log file parameter
-        self.model.setParam("LogFile", self.log_file_path)
+        if save_on:
+            self.model.setParam("LogFile", self.log_file_path)
+        else:
+            self.model.setParam("OutputFlag", 0)
         # set other user-defined parameters
         for key, value in kwargs.items():
             self.model.setParam(key, value)
         return
 
-    def opt(self, callback_function: Callable = None, **kwargs):
-        self.set_parameters(**kwargs)
+    def opt(self, callback_function: Callable = None, save_on: bool = True, **kwargs):
+        self.set_parameters(save_on=save_on, **kwargs)
         if callback_function is None:
             self.model.optimize()
         else:
             self.model.optimize(callback_function)
-        self.save_optimization_info()
-        self.plot_results()
+        if save_on:
+            self.save_optimization_info()
+            self.plot_results()
         return
 
     def get_brief_results_decorated_txt(self):
@@ -457,7 +461,7 @@ class OptimizationModel:
 
 
 class VAO(OptimizationModel):
-    def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True):
+    def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True, plot_ground: bool = True):
         name = "vao"
         if LC_ON:
             name += "_LC"
@@ -479,9 +483,10 @@ class VAO(OptimizationModel):
             for s in range(1, self.ground.num_s + 1)
         )
         self.set_objectives(gurobi_linear_expression=obj_exp)
-        self.ground.plot_ground_with_envelope().savefig(
-            f"{self.directory}\\{self.name}-ground_profile.pdf", dpi=600
-        )
+        if plot_ground:
+            self.ground.plot_ground_with_envelope().savefig(
+                f"{self.directory}\\{self.name}-ground_profile.pdf", dpi=600
+            )
         return
 
     def add_variables(self):
@@ -495,9 +500,10 @@ class VAO(OptimizationModel):
             variables=self.variable_groups["vao"])
         return
 
-    def optimize(self, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+    def optimize(self, save_on: bool = True, IntegralityFocus=1, NumericFocus=1, Cuts=2,
                  IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
+            save_on=save_on,
             IntegralityFocus=IntegralityFocus,
             NumericFocus=NumericFocus,
             Cuts=Cuts,
@@ -591,9 +597,10 @@ class TC(OptimizationModel):
         )
         return
 
-    def optimize(self, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+    def optimize(self, save_on: bool = True, IntegralityFocus=1, NumericFocus=1, Cuts=2,
                  IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
+            save_on=save_on,
             IntegralityFocus=IntegralityFocus,
             NumericFocus=NumericFocus,
             Cuts=Cuts,
@@ -648,24 +655,32 @@ class EETC_VAO(OptimizationModel):
         pass
 
 
-def get_all_ground_sotc():
-    pass
+def get_all_ground_sotc(train: Train):
+    for i in range(1, 7):
+        gd = Ground(name=f"gd{i}")
+        vao = VAO(ground=gd, VI_on=True, LC_ON=True, plot_ground=False)
+        vao.optimize(save_on=False)
+        track = vao.get_track()
+        sotc = TC(train=train, track=track, is_ee=False)
+        sotc.optimize(save_on=True)
+    return
 
 
 def main():
-    vao = VAO(ground=Ground("gd2"), VI_on=False, LC_ON=False)
-    vao.optimize()
-    vao2 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=False)
-    vao2.optimize()
-    vao3 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=True)
-    vao3.optimize()
-    track = vao.get_track()
-    sotc = TC(train=Train("CRH380AL"), track=track, is_ee=False)
-    sotc.optimize()
-    eetc1 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=False, warm_start_data=sotc.variable_groups)
-    eetc1.optimize()
-    eetc2 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=True)
-    eetc2.optimize()
+    # vao = VAO(ground=Ground("gd2"), VI_on=False, LC_ON=False)
+    # vao.optimize()
+    # vao2 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=False)
+    # vao2.optimize()
+    # vao3 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=True)
+    # vao3.optimize()
+    # track = vao.get_track()
+    # sotc = TC(train=Train("CRH380AL"), track=track, is_ee=False)
+    # sotc.optimize()
+    # eetc1 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=False, warm_start_data=sotc.variable_groups)
+    # eetc1.optimize()
+    # eetc2 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=True)
+    # eetc2.optimize()
+    get_all_ground_sotc(Train("HXD2"))
     pass
 
 

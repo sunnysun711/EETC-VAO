@@ -70,22 +70,22 @@
         "de": 0.05,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 106.95,
+                "TD_MIN": 93,
+                "TU_MAX": 108.1,
+                "TU_MIN": 94
             },
             "HXD1D": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 108.1,
+                "TD_MIN": 94,
+                "TU_MAX": 109.25,
+                "TU_MIN": 95
             },
             "HXD2": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 109.25,
+                "TD_MIN": 95,
+                "TU_MAX": 112.7,
+                "TU_MIN": 98
             }
         },
         "v_lim": [ [ 0, 80 ], [ 200, 200 ], [ 2800, 80 ] ],
@@ -127,22 +127,22 @@
         "de": 0.1,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 106,
-                "TD_MIN": 90,
-                "TU_MAX": 106,
-                "TU_MIN": 90
+                "TD_MAX": 110.4,
+                "TD_MIN": 96,
+                "TU_MAX": 110.4,
+                "TU_MIN": 96
             },
             "HXD1D": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 110.4,
+                "TD_MIN": 96,
+                "TU_MAX": 111.55,
+                "TU_MIN": 97
             },
             "HXD2": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 112.7,
+                "TD_MIN": 98,
+                "TU_MAX": 112.7,
+                "TU_MIN": 98
             }
         },
         "v_lim": [[0,80], [200, 200], [2800, 80]],
@@ -184,22 +184,22 @@
         "de": 0.1,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 154,
-                "TD_MIN": 135,
-                "TU_MAX": 154,
-                "TU_MIN": 135
+                "TD_MAX": 164.45,
+                "TD_MIN": 143,
+                "TU_MAX": 164.45,
+                "TU_MIN": 143
             },
             "HXD1D": {
-                "TD_MAX": 154,
-                "TD_MIN": 135,
-                "TU_MAX": 154,
-                "TU_MIN": 135
+                "TD_MAX": 171.35,
+                "TD_MIN": 149,
+                "TU_MAX": 170.2,
+                "TU_MIN": 148
             },
             "HXD2": {
-                "TD_MAX": 154,
-                "TD_MIN": 135,
-                "TU_MAX": 154,
-                "TU_MIN": 135
+                "TD_MAX": 179.4,
+                "TD_MIN": 156,
+                "TU_MAX": 178.25,
+                "TU_MIN": 155
             }
         },
         "v_lim": [[0,80], [300, 250], [4700, 80]],
@@ -241,22 +241,22 @@
         "de": 0.05,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 109.25,
+                "TD_MIN": 95,
+                "TU_MAX": 109.25,
+                "TU_MIN": 95
             },
             "HXD1D": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 108.1,
+                "TD_MIN": 94,
+                "TU_MAX": 110.4,
+                "TU_MIN": 96
             },
             "HXD2": {
-                "TD_MAX": 105,
-                "TD_MIN": 90,
-                "TU_MAX": 105,
-                "TU_MIN": 90
+                "TD_MAX": 109.25,
+                "TD_MIN": 95,
+                "TU_MAX": 112.7,
+                "TU_MIN": 98
             }
         },
         "v_lim": [[0,80], [200, 200], [2800, 80]],
@@ -298,22 +298,22 @@
         "de": 0.05,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 150,
-                "TD_MIN": 135,
-                "TU_MAX": 150,
-                "TU_MIN": 135
+                "TD_MAX": 161,
+                "TD_MIN": 140,
+                "TU_MAX": 161,
+                "TU_MIN": 140
             },
             "HXD1D": {
-                "TD_MAX": 150,
-                "TD_MIN": 135,
-                "TU_MAX": 150,
-                "TU_MIN": 135
+                "TD_MAX": 167.9,
+                "TD_MIN": 146,
+                "TU_MAX": 166.75,
+                "TU_MIN": 145
             },
             "HXD2": {
-                "TD_MAX": 150,
-                "TD_MIN": 135,
-                "TU_MAX": 150,
-                "TU_MIN": 135
+                "TD_MAX": 174.8,
+                "TD_MIN": 152,
+                "TU_MAX": 175.95,
+                "TU_MIN": 153
             }
         },
         "v_lim": [[0, 80], [300, 250], [4700, 80]],
@@ -355,22 +355,22 @@
         "de": 0.1,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 510,
+                "TD_MAX": 552,
                 "TD_MIN": 480,
-                "TU_MAX": 510,
+                "TU_MAX": 552,
                 "TU_MIN": 480
             },
             "HXD1D": {
-                "TD_MAX": 510,
-                "TD_MIN": 480,
-                "TU_MAX": 510,
-                "TU_MIN": 480
+                "TD_MAX": 623.3,
+                "TD_MIN": 542,
+                "TU_MAX": 622.15,
+                "TU_MIN": 541
             },
             "HXD2": {
-                "TD_MAX": 510,
-                "TD_MIN": 480,
-                "TU_MAX": 510,
-                "TU_MIN": 480
+                "TD_MAX": 680.8,
+                "TD_MIN": 592,
+                "TU_MAX": 680.8,
+                "TU_MIN": 592
             }
         },
         "v_lim": [[0, 200]],
