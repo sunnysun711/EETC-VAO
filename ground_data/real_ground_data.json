@@ -5,22 +5,22 @@
         "de": 1,
         "time": {
             "CRH380AL": {
-                "TD_MAX": 1840,
-                "TU_MAX": 1840,
-                "TD_MIN": 1600,
-                "TU_MIN": 1600
+                "TD_MAX": 1863,
+                "TU_MAX": 1854.95,
+                "TD_MIN": 1620,
+                "TU_MIN": 1613
             },
             "HXD1D": {
-                "TD_MAX": 1840,
-                "TU_MAX": 1840,
-                "TD_MIN": 1600,
-                "TU_MIN": 1600
+                "TD_MAX": 2179.25,
+                "TU_MAX": 2160.85,
+                "TD_MIN": 1895,
+                "TU_MIN": 1879
             },
             "HXD2": {
-                "TD_MAX": 1840,
-                "TU_MAX": 1840,
-                "TD_MIN": 1600,
-                "TU_MIN": 1600
+                "TD_MAX": 2402.35,
+                "TU_MAX": 2400.05,
+                "TD_MIN": 2089,
+                "TU_MIN": 2087
             }
         },
         "v_lim": [[0,200]],
