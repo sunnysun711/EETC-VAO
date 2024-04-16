@@ -264,10 +264,21 @@ def add_tc_constraints(model: gp.Model,
     model.addConstrs((E_k[i] == 0 for i in [1, S + 1]), name=f"tc_Ek^{upd}")
     model.addConstrs((E_k[i] <= ground.ek_lim[i, 1] for i in range(2, S + 1)), name=f'tc_Ek^{upd}')
 
-    # #    T_max
-    # t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
-    # model.addConstr(t.sum() <= t_max, name=f"tc_T^{upd}")
-    pass
+    return
+
+
+def add_tc_constraints_max_time(
+        model: gp.Model,
+        ground: Ground,
+        train: Train,
+        variables: dict[str, gp.Var],
+        vao_variables=None,
+        is_uphill_dir: bool = True):
+    # section running time restriction
+    t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
+    upd = "u" if is_uphill_dir else "d"
+    model.addConstr(variables['t'].sum() <= t_max, name=f"tc_T^{upd}")
+    return
 
 
 def add_tc_valid_inequalities(
@@ -280,14 +291,18 @@ def add_tc_valid_inequalities(
     # section running time restriction
     t_max = ground.time[train.name]["TU_MAX"] if is_uphill_dir else ground.time[train.name]["TD_MAX"]
     upd = "u" if is_uphill_dir else "d"
-    model.addConstr(variables['t'].sum() >= t_max - 1, name=f"tc-VI_{upd}")
+    model.addConstr(variables['t'].sum() >= t_max * 0.98, name=f"tc-VI_{upd}")
     return
+
+
+class ModelNotSolvedException(Exception):
+    pass
 
 
 class OptimizationModel:
     """
     input name, get self.name = f"{ground.name}__{train_name}__{name}"
-        e.g. gd_gaoyan__CRH380AL__vao_LC_VI, gd_gaoyan__CRH380AL__eetc_tcVI, gd2__HXD2__eetc-vao_LC_VI_tc_VI
+        e.g. gd_gaoyan__CRH380AL__vao_LC_VI, gd_gaoyan__CRH380AL__eetc_tcVI, gd2__HXD2__eetc-vao_LC_VI_tcVI
     """
 
     def __init__(self, name: str, ground: Ground, train: Train = None):
@@ -370,8 +385,11 @@ class OptimizationModel:
         else:
             self.model.optimize(callback_function)
         if save_on:
-            self.save_optimization_info()
-            self.plot_results()
+            try:
+                self.save_optimization_info()
+                self.plot_results()
+            except Exception as e:
+                print(e)
         return
 
     def get_brief_results_decorated_txt(self):
@@ -445,14 +463,15 @@ class OptimizationModel:
         else:
             self.model.write(f"{save_name}.json")  # solution file
 
-        # append into log files
-        with open(self.log_file_path, "a") as f:
-            brief_res = self.get_brief_results_decorated_txt()
-            if print_out:
-                print(brief_res)
-            f.write(brief_res)
-            f.write("\n\n\n\n")
-            f.write(self.get_detail_results_decorated_txt())
+            # append into log files
+            with open(self.log_file_path, "a") as f:
+                brief_res = self.get_brief_results_decorated_txt()
+                if print_out:
+                    print(brief_res)
+                f.write(brief_res)
+                f.write("\n\n\n\n")
+                f.write(self.get_detail_results_decorated_txt())
+
         return
 
     def plot_results(self):
@@ -500,9 +519,11 @@ class VAO(OptimizationModel):
             variables=self.variable_groups["vao"])
         return
 
-    def optimize(self, save_on: bool = True, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+    def optimize(self, callback_function: Callable = None, save_on: bool = True,
+                 IntegralityFocus=1, NumericFocus=1, Cuts=2,
                  IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
+            callback_function=callback_function,
             save_on=save_on,
             IntegralityFocus=IntegralityFocus,
             NumericFocus=NumericFocus,
@@ -514,7 +535,7 @@ class VAO(OptimizationModel):
         return
 
     def get_track(self) -> Track:
-        if self.model.Status != 2:
+        if (self.model.Status != GRB.Status.OPTIMAL) & (self.model.Status != GRB.Status.TIME_LIMIT):
             raise Exception("Model is not solved!")
         e = np.array([_.X for _ in self.variable_groups['vao']['e'].values()])
         pi = np.array([_.X for _ in self.variable_groups['vao']['pi'].values()])
@@ -544,6 +565,8 @@ class TC(OptimizationModel):
         vao_variables: dict[str, np.ndarray] = {"e": track.e, "z1": track.z1}
         self.add_constraints(
             constraint_func=add_tc_constraints, vao_variables=vao_variables)
+        if is_ee:
+            self.add_constraints(constraint_func=add_tc_constraints_max_time)
         if tcVI_on:
             self.add_constraints(
                 constraint_func=add_tc_valid_inequalities, vao_variables=vao_variables)
@@ -597,9 +620,11 @@ class TC(OptimizationModel):
         )
         return
 
-    def optimize(self, save_on: bool = True, IntegralityFocus=1, NumericFocus=1, Cuts=2,
+    def optimize(self, callback_function: Callable = None, save_on: bool = True,
+                 IntegralityFocus=1, NumericFocus=1, Cuts=2,
                  IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
+            callback_function=callback_function,
             save_on=save_on,
             IntegralityFocus=IntegralityFocus,
             NumericFocus=NumericFocus,
@@ -639,11 +664,11 @@ class TC(OptimizationModel):
 class EETC_VAO(OptimizationModel):
     def __init__(self,
                  ground: Ground, train: Train,
-                 LC_ON: bool = True, VI_on: bool = True,
+                 LC_on: bool = True, VI_on: bool = True,
                  tcVI_on: bool = True,
                  warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None):
         name = f"eetc-vao"
-        if LC_ON:
+        if LC_on:
             name += "_LC"
         if VI_on:
             name += "_VI"
@@ -652,7 +677,134 @@ class EETC_VAO(OptimizationModel):
         if warm_start_data is not None:
             name += "_WS"
         super().__init__(name, ground, train)
+
+        self.add_variables()
+
+        self.add_constraints(constraint_func=add_vao_constraints, variable_group_name="vao")
+        self.add_constraints(constraint_func=add_tc_constraints, variable_group_name="tc")
+        self.add_constraints(constraint_func=add_tc_constraints_max_time, variable_group_name="tc")
+
+        if LC_on:
+            self.add_constraints(constraint_func=add_vao_logic_cuts, variable_group_name="vao")
+        if VI_on:
+            self.add_constraints(constraint_func=add_vao_valid_inequalities, variable_group_name="vao")
+        if tcVI_on:
+            self.add_constraints(constraint_func=add_tc_valid_inequalities, variable_group_name="tc")
+
+        obj_exp = gp.LinExpr()
+        obj_exp += gp.quicksum(
+            self.variable_groups['vao']['C'][s] + self.variable_groups['vao']['C6tn_e'][s]
+            for s in range(1, self.ground.num_s + 1)
+        )
+        _pr_obj = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
+        n_tr_up = self.ground.N_tr_up[self.train.name]
+        n_tr_down = self.ground.N_tr_down[self.train.name]
+        # auxiliary energy cost
+        obj_exp += gp.quicksum(self.variable_groups['tc_u']['t']) * self.train.mu * n_tr_up
+        obj_exp += gp.quicksum(self.variable_groups['tc_d']['t']) * self.train.mu * n_tr_down
+        # traction energy cost
+        obj_exp += gp.quicksum(self.variable_groups['tc_u']['kappa']) * _pr_obj * n_tr_up
+        obj_exp += gp.quicksum(self.variable_groups['tc_d']['kappa']) * _pr_obj * n_tr_down
+        obj_exp = obj_exp * CONST['lambda']
+        self.model.setObjective(obj_exp, GRB.MINIMIZE)
+
+        self.set_warm_start(warm_start_data)
+        return
+
+    def add_variables(self):
+        super().add_vars(variable_group_name="vao", variable_function=add_vao_variables)
+        super().add_vars(
+            variable_group_name="tc_u",
+            variable_function=add_tc_variables,
+            train=self.train,
+            is_uphill_dir=True)
+        super().add_vars(
+            variable_group_name="tc_d",
+            variable_function=add_tc_variables,
+            train=self.train,
+            is_uphill_dir=False)
+        return
+
+    def add_constraints(self, constraint_func: Callable, variable_group_name: str = "tc_u"):
+        if variable_group_name == "vao":
+            constraint_func(model=self.model, ground=self.ground, variables=self.variable_groups["vao"])
+        else:
+            constraint_func(
+                model=self.model,
+                ground=self.ground,
+                train=self.train,
+                variables=self.variable_groups["tc_u"],
+                vao_variables=self.variable_groups["vao"],
+                is_uphill_dir=True
+            )
+            constraint_func(
+                model=self.model,
+                ground=self.ground,
+                train=self.train,
+                variables=self.variable_groups["tc_d"],
+                vao_variables=self.variable_groups["vao"],
+                is_uphill_dir=False
+            )
         pass
+
+    def optimize(self, callback_function: Callable = None, save_on: bool = True,
+                 IntegralityFocus=1, NumericFocus=1, Cuts=2,
+                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+        super().opt(
+            callback_function=callback_function,
+            save_on=save_on,
+            IntegralityFocus=IntegralityFocus,
+            NumericFocus=NumericFocus,
+            Cuts=Cuts,
+            IntFeasTol=IntFeasTol,
+            MIPGap=MIPGap,
+            TimeLimit=TimeLimit,
+            **kwargs)
+        return
+
+    def get_track(self) -> Track:
+        if (self.model.Status != GRB.Status.OPTIMAL) & (self.model.Status != GRB.Status.TIME_LIMIT):
+            raise ModelNotSolvedException("Model is not solved!")
+        e = np.array([_.X for _ in self.variable_groups['vao']['e'].values()])
+        pi = np.array([_.X for _ in self.variable_groups['vao']['pi'].values()])
+        z1 = np.array([_.X for _ in self.variable_groups['vao']['z1'].values()])
+        track = Track(e=e, pi=pi, z1=z1, ground=self.ground)
+        return track
+
+    def plot_results(self):
+        # plot track profile
+        try:
+            track = self.get_track()
+        except ModelNotSolvedException as e:
+            print(e)
+            return
+        fig = track.plot_ground_track()
+        fig.savefig(self.directory + f"\\{self.name}-track_profile.pdf", dpi=600)
+
+        # plot velocity and control curves
+        S = self.ground.num_s
+        distances = (np.arange(0, S + 1) * self.ground.ds +
+                     self.ground.bottom_left_corner_coordinates[0])
+        plt.figure(figsize=(8, 4))
+        ax1 = plt.subplot(211)
+        ax2 = plt.subplot(212, sharex=ax1)
+        for dr in ['_u', '_d']:
+            tip_shape = 'x' if dr == "_u" else "o"
+            v_arr = np.sqrt(
+                [self.variable_groups[f"tc{dr}"]['E_k'][i].X for i in range(1, S + 2)])
+            ax1.plot(distances, v_arr, f"{tip_shape}-", label=f"v{dr}")
+            u_arr = np.array(
+                [self.variable_groups[f'tc{dr}']['u'][i].X for i in range(1, S + 1)])
+            ax2.plot(distances[:-1], u_arr, f"{tip_shape}-", label=f"u{dr}")
+        ax1.legend(fontsize="small")
+        ax1.set_ylabel("Velocity (km/h)", fontsize="small")
+        ax2.legend(fontsize="small")
+        ax2.set_xlabel("Horizontal location (m)", fontsize="small")
+        ax2.set_ylabel("Unit control force (N/kN)", fontsize="small")
+        plt.tight_layout()
+        plt.savefig(self.directory + f"\\{self.name}-speed_profile.pdf", dpi=600)
+
+        return
 
 
 def get_all_ground_sotc(train: Train):
@@ -663,6 +815,40 @@ def get_all_ground_sotc(train: Train):
         track = vao.get_track()
         sotc = TC(train=train, track=track, is_ee=False)
         sotc.optimize(save_on=True)
+    return
+
+
+def get_all_train_sotc(ground: Ground):
+    vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
+    vao.optimize(save_on=True)
+    track = vao.get_track()
+    for train in ["CRH380AL", "HXD1D", "HXD2"]:
+        tr = Train(name=train)
+        sotc = TC(train=tr, track=track, is_ee=False)
+        sotc.optimize(save_on=True)
+    return
+
+
+def one_case_routine(ground: Ground, train: Train, warm_start_case: str = "sotc"):
+    if warm_start_case == "":
+        ev = EETC_VAO(ground=ground, train=train)
+        ev.optimize(save_on=True)
+        return
+    vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
+    vao.optimize(save_on=True)
+    track = vao.get_track()
+    if warm_start_case == "sotc":
+        tc = TC(train=train, track=track, is_ee=False)
+        tc.optimize(save_on=True)
+    elif warm_start_case == "eetc":
+        tc = TC(train=train, track=track, is_ee=True, tcVI_on=True)
+        tc.optimize(save_on=True, TimeLimit=1800)
+    else:
+        raise ValueError("warm_start_case must be \"sotc\" or \"eetc\".")
+
+    variables_dict: dict = {**vao.variable_groups, **tc.variable_groups}
+    ev = EETC_VAO(ground=ground, train=train, warm_start_data=variables_dict)
+    ev.optimize(save_on=True)
     return
 
 
@@ -680,7 +866,21 @@ def main():
     # eetc1.optimize()
     # eetc2 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=True)
     # eetc2.optimize()
-    get_all_ground_sotc(Train("HXD2"))
+    # get_all_ground_sotc(Train("HXD2"))
+    # gd = Ground(name="gd_gaoyan", type_="real")
+    # get_all_train_sotc(ground=gd)
+    for train in ["CRH380AL", "HXD1D", "HXD2"]:
+        tr = Train(name=train)
+        for i in range(1, 7):
+            ev = EETC_VAO(ground=Ground(f"gd{i}"), train=tr, LC_on=True, VI_on=True, tcVI_on=False)
+            ev.optimize(save_on=True)
+
+    gd = Ground(name="gd_gaoyan", type_="real")
+    for train in ["CRH380AL", "HXD1D", "HXD2"]:
+        tr = Train(name=train)
+        ev = EETC_VAO(ground=gd, train=tr, LC_on=True, VI_on=True, tcVI_on=False)
+        ev.optimize(save_on=True)
+
     pass
 
 
