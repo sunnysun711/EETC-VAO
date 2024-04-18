@@ -32,7 +32,8 @@ def generate_random_ground_points(
 
     if is_x_location_random:
         x = np.array(
-            [0, *sorted(np.random.random(size=num_vpi - 2)), 1]) * distance_meter
+            [0, *sorted(np.random.random(size=num_vpi - 2)), 1]
+        ) * distance_meter
     else:
         x = np.arange(y.size) / y.size * \
             (distance_meter + distance_meter / num_vpi)
@@ -219,10 +220,13 @@ class Ground:
 
     def generate_point_index(self) -> np.ndarray:
         # 处理points转换，变成ix，iy和左下角坐标值
-        discrete_points = discretize_points(points=self.points, dx=self.ds, dy=self.de)
-        self.bottom_left_corner_coordinates = get_bottom_left_corner_coordinates(points=discrete_points)
+        discrete_points = discretize_points(
+            points=self.points, dx=self.ds, dy=self.de)
+        self.bottom_left_corner_coordinates = \
+            get_bottom_left_corner_coordinates(points=discrete_points)
         discrete_points = shift_point_coordinates(
-            points=discrete_points, bottom_left_corner_coordinates=self.bottom_left_corner_coordinates)
+            points=discrete_points,
+            bottom_left_corner_coordinates=self.bottom_left_corner_coordinates)
         points_index = np.array(
             [discrete_points[:, 0] / self.ds,
              discrete_points[:, 1] / self.de]).astype(int).T
@@ -333,22 +337,37 @@ class Ground:
         # if the lower envelope has greater gradients than i_max, smooth it
         e_diff_range = self.i_max * self.ds / self.de
         # forward check
-        for i in range(lower_envelope_full.size - 1):
+        for i in range(self.num_s):
+            # lower
             le1, le2 = lower_envelope_full[i], lower_envelope_full[i + 1]
             le2_min, le2_max = le1 - e_diff_range, le1 + e_diff_range
             le2 = np.max([le2, le2_min])
             le2 = np.min([le2, le2_max])
             lower_envelope_full[i + 1] = le2
+            # upper
+            ue1, ue2 = upper_envelope_full[i], upper_envelope_full[i + 1]
+            ue2_min, ue2_max = ue1 - e_diff_range, ue1 + e_diff_range
+            ue2 = np.max([ue2, ue2_min])
+            ue2 = np.min([ue2, ue2_max])
+            upper_envelope_full[i + 1] = ue2
+
         # backward check
-        for i in range(lower_envelope_full.size - 1):
-            le2, le1 = lower_envelope_full[-i - 1], lower_envelope_full[-i - 2]
-            le2_min, le2_max = le1 - e_diff_range, le1 + e_diff_range
-            le2 = np.max([le2, le2_min])
-            le2 = np.min([le2, le2_max])
-            lower_envelope_full[-i - 1] = le2
+        for i in range(1, self.num_s + 1):
+            # lower
+            le1, le2 = lower_envelope_full[-i - 2], lower_envelope_full[-i - 1]
+            le1_min, le1_max = le2 - e_diff_range, le2 + e_diff_range
+            le1 = np.max([le1, le1_min])
+            le1 = np.min([le1, le1_max])
+            lower_envelope_full[-i - 2] = le1
+            # upper
+            ue1, ue2 = upper_envelope_full[-i - 2], upper_envelope_full[-i - 1]
+            ue1_min, ue1_max = ue2 - e_diff_range, ue2 + e_diff_range
+            ue1 = np.max([ue1, ue1_min])
+            ue1 = np.min([ue1, ue1_max])
+            upper_envelope_full[-i - 2] = ue1
 
         # if the envelope exceeds actual ground, change to ground.
-        upper_envelope_full = np.vstack((self.e6g, upper_envelope_full)).max(axis=0)
+        # upper_envelope_full = np.vstack((self.e6g, upper_envelope_full)).max(axis=0)
         lower_envelope_full = np.vstack((self.e6g, lower_envelope_full)).min(axis=0)
 
         return np.array([lower_envelope_full, upper_envelope_full])
@@ -386,8 +405,8 @@ class Ground:
 
 
 def main():
-    # gd = Ground(name="gd2", type_="random")
-    gd = Ground(name="gd_gaoyan", type_="real")
+    gd = Ground(name="gd6", type_="random")
+    # gd = Ground(name="gd_gaoyan", type_="real")
     # for grd in ["gd0", "gd1", "gd2", "gd3", "gd4", "gd5", "gd6"]:
     #     gd = Ground(name=grd)
     #     print(gd.num_s)

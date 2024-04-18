@@ -309,6 +309,7 @@ class OptimizationModel:
         train_name = "" if train is None else train.name
         self.name: str = f"{ground.name}__{train_name}__{name}"  # vao, eetc, sotc, eetc-vao, ...
         self.model: gp.Model = gp.Model(name)
+        self.model._variable_groups: dict = {}  # for callback use.
         self.ground: Ground = ground
         self.train: Train = train
         self.directory = f"{ROOT}\\Cases\\{self.name}"
@@ -333,6 +334,7 @@ class OptimizationModel:
         variable_names = self._vao_variable_names if variable_group_name == "vao" else self._tc_variable_names
         for var_name, variable in zip(variable_names, variables):
             self.variable_groups[variable_group_name][var_name] = variable
+        self.model._variable_groups[variable_group_name] = self.variable_groups[variable_group_name]
         return
 
     def add_variables(self, **kwargs):
@@ -746,6 +748,16 @@ class EETC_VAO(OptimizationModel):
                 is_uphill_dir=False
             )
         pass
+
+    @staticmethod
+    def callback(model, where):
+        if where == gp.GRB.Callback.MIPSOL:  # Integer solution found.
+            e = model.cbGetSolution(model._variable_groups["vao"]["e"])
+            pi = model.cbGetSolution(model._variable_groups["vao"]['pi'])
+            z1 = model.cbGetSolution(model._variable_groups["vao"]['z1'])
+
+        # e = model.model._variable_groups["vao"]
+        ...
 
     def optimize(self, callback_function: Callable = None, save_on: bool = True,
                  IntegralityFocus=1, NumericFocus=1, Cuts=2,
