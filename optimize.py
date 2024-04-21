@@ -865,34 +865,16 @@ def one_case_routine(ground: Ground, train: Train, warm_start_case: str = "sotc"
 
 
 def main():
-    # vao = VAO(ground=Ground("gd2"), VI_on=False, LC_ON=False)
-    # vao.optimize()
-    # vao2 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=False)
-    # vao2.optimize()
-    # vao3 = VAO(ground=Ground("gd2"), VI_on=True, LC_ON=True)
-    # vao3.optimize()
-    # track = vao.get_track()
-    # sotc = TC(train=Train("CRH380AL"), track=track, is_ee=False)
-    # sotc.optimize()
-    # eetc1 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=False, warm_start_data=sotc.variable_groups)
-    # eetc1.optimize()
-    # eetc2 = TC(train=Train("CRH380AL"), track=track, is_ee=True, tcVI_on=True)
-    # eetc2.optimize()
-    # get_all_ground_sotc(Train("HXD2"))
-    # gd = Ground(name="gd_gaoyan", type_="real")
-    # get_all_train_sotc(ground=gd)
-    for train in ["CRH380AL", "HXD1D", "HXD2"]:
-        tr = Train(name=train)
-        for i in range(1, 7):
-            ev = EETC_VAO(ground=Ground(f"gd{i}"), train=tr, LC_on=True, VI_on=True, tcVI_on=False)
-            ev.optimize(save_on=True)
-
-    gd = Ground(name="gd_gaoyan", type_="real")
-    for train in ["CRH380AL", "HXD1D", "HXD2"]:
-        tr = Train(name=train)
-        ev = EETC_VAO(ground=gd, train=tr, LC_on=True, VI_on=True, tcVI_on=False)
-        ev.optimize(save_on=True)
-
+    for i in range(1, 7):
+        gd = Ground(name=f"gd{i}")
+        vao = VAO(ground=gd, plot_ground=True)
+        vao.optimize(save_on=True)
+        track = vao.get_track()
+        for train in ["CRH380AL", "HXD1D", "HXD2"]:
+            tr = Train(name=train)
+            tc = TC(train=tr, track=track, is_ee=True)
+            tc.optimize()
+            tc.plot_results()
     pass
 
 
