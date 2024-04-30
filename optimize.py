@@ -864,7 +864,7 @@ def one_case_routine(ground: Ground, train: Train, warm_start_case: str = "sotc"
     return
 
 
-def main():
+def get_all_case_eetc():
     for i in range(1, 7):
         gd = Ground(name=f"gd{i}")
         vao = VAO(ground=gd, plot_ground=True)
@@ -874,7 +874,19 @@ def main():
             tr = Train(name=train)
             tc = TC(train=tr, track=track, is_ee=True)
             tc.optimize()
-            tc.plot_results()
+    pass
+
+
+def main():
+    grd = Ground(name="gd_gaoyan", type_="real")
+    # grd = Ground(name="gd2")
+    vao = VAO(ground=grd, plot_ground=False)
+    vao.optimize(save_on=True)
+    track = vao.get_track()
+    for train in ["CRH380AL", "HXD1D", "HXD2"]:
+        tr = Train(name=train)
+        tc = TC(train=tr, track=track, is_ee=True, tcVI_on=True)
+        tc.optimize()
     pass
 
 

@@ -2,5 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ground_data/Other ground data/railway-layer-model_v0.1.1" vcs="Git" />
   </component>
 </project>
