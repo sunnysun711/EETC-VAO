@@ -523,7 +523,7 @@ class VAO(OptimizationModel):
 
     def optimize(self, callback_function: Callable = None, save_on: bool = True,
                  IntegralityFocus=1, NumericFocus=1, Cuts=2,
-                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+                 IntFeasTol=1e-07, MIPGap: float = 0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
             callback_function=callback_function,
             save_on=save_on,
@@ -752,9 +752,17 @@ class EETC_VAO(OptimizationModel):
     @staticmethod
     def callback(model, where):
         if where == gp.GRB.Callback.MIPSOL:  # Integer solution found.
-            e = model.cbGetSolution(model._variable_groups["vao"]["e"])
-            pi = model.cbGetSolution(model._variable_groups["vao"]['pi'])
-            z1 = model.cbGetSolution(model._variable_groups["vao"]['z1'])
+            h = 1
+
+            e: dict[int, float] = model.cbGetSolution(model._variable_groups["vao"]["e"])
+            pi: dict[int, float] = model.cbGetSolution(model._variable_groups["vao"]['pi'])
+            z1: dict[int, float] = model.cbGetSolution(model._variable_groups["vao"]['z1'])
+
+        elif where == GRB.Callback.MIPNODE and model.cbGet(GRB.Callback.MIPNODE_STATUS) == GRB.OPTIMAL:
+            h = 0
+
+            e: np.ndarray = np.array([model.cbGetNodeRel(_) for _ in model._variable_groups["vao"]["e"].values()])
+
 
         # e = model.model._variable_groups["vao"]
         ...
@@ -847,19 +855,21 @@ def one_case_routine(ground: Ground, train: Train, warm_start_case: str = "sotc"
         ev.optimize(save_on=True)
         return
     vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
-    vao.optimize(save_on=True)
+    vao.optimize(save_on=True, MIPGap=0.0011)
     track = vao.get_track()
     if warm_start_case == "sotc":
         tc = TC(train=train, track=track, is_ee=False)
         tc.optimize(save_on=True)
     elif warm_start_case == "eetc":
-        tc = TC(train=train, track=track, is_ee=True, tcVI_on=True)
-        tc.optimize(save_on=True, TimeLimit=1800)
+        tc1 = TC(train=train, track=track, is_ee=False)
+        tc1.optimize(save_on=False, TimeLimit=3600)
+        tc = TC(train=train, track=track, is_ee=True, tcVI_on=False, warm_start_data=tc1.variable_groups)
+        tc.optimize(save_on=True)
     else:
         raise ValueError("warm_start_case must be \"sotc\" or \"eetc\".")
 
     variables_dict: dict = {**vao.variable_groups, **tc.variable_groups}
-    ev = EETC_VAO(ground=ground, train=train, warm_start_data=variables_dict)
+    ev = EETC_VAO(ground=ground, train=train, warm_start_data=variables_dict, tcVI_on=False)
     ev.optimize(save_on=True)
     return
 
@@ -878,15 +888,21 @@ def get_all_case_eetc():
 
 
 def main():
-    grd = Ground(name="gd_gaoyan", type_="real")
+    # grd = Ground(name="gd_gaoyan", type_="real")
+    grd = Ground(name="gd1")
+    tr = Train("HXD1D")
+    # one_case_routine(ground=grd, train=tr, warm_start_case="eetc")
+    ev = EETC_VAO(ground=grd, train=tr)
+    ev.optimize(callback_function=EETC_VAO.callback)
+
     # grd = Ground(name="gd2")
-    vao = VAO(ground=grd, plot_ground=False)
-    vao.optimize(save_on=True)
-    track = vao.get_track()
-    for train in ["CRH380AL", "HXD1D", "HXD2"]:
-        tr = Train(name=train)
-        tc = TC(train=tr, track=track, is_ee=True, tcVI_on=True)
-        tc.optimize()
+    # vao = VAO(ground=grd, plot_ground=False)
+    # vao.optimize(save_on=True)
+    # track = vao.get_track()
+    # for train in ["CRH380AL", "HXD1D", "HXD2"]:
+    #     tr = Train(name=train)
+    #     tc = TC(train=tr, track=track, is_ee=True, tcVI_on=True)
+    #     tc.optimize()
     pass
 
 

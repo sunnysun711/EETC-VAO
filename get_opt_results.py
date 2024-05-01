@@ -8,6 +8,11 @@ import pandas as pd
 def parse_log_file(file_path) -> dict[str, float]:
     # Define a dictionary to store the extracted values
     results = {
+        'e': None,
+        'pi': None,
+        'z1': None,
+        'total_tunnel_number': None,
+        'constructionCost': None,
         'T_u': None,
         'tractionCostPerTrain_u': None,
         'auxiliaryCostPerTrain_u': None,
@@ -21,6 +26,11 @@ def parse_log_file(file_path) -> dict[str, float]:
 
     # Define patterns to match the desired lines
     patterns = {
+        'e': r'"e":\s*(\{.*?\})',
+        'pi': r'"pi":\s*(\{.*?\})',
+        'z1': r'"z1":\s*(\{.*?\})',
+        'total_tunnel_number': r'total tunnel number:\s*([\d\.]+)',
+        'constructionCost': r'constructionCost:\s*([\d\.]+)',
         'T_u': r'T_u:\s*([\d\.]+)',
         'tractionCostPerTrain_u': r'tractionCostPerTrain_u:\s*([\d\.]+)',
         'auxiliaryCostPerTrain_u': r'auxiliaryCostPerTrain_u:\s*([\d\.]+)',
@@ -66,6 +76,25 @@ def get_tc_results_from_folder(folder_path: str):
     return
 
 
+def get_eetcvao_results_from_folder(folder_path: str):
+    root = fr"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\{folder_path}"
+    model_folders = os.listdir(root)
+    result_dic: dict[tuple[str, str], dict[str, Any]] = {}
+    for model_folder in model_folders:
+        case, train, model_name = model_folder.split("__")
+        print(case, train, model_name)
+        log_file: str = os.path.join(root, model_folder, f"{model_folder}.log")
+        parsed_log: dict = parse_log_file(log_file)
+        result_dic[case, train] = {
+            "constructionCost": parsed_log["constructionCost"],
+            "operationCostTotal": parsed_log["operationCostTotal"]
+        }
+    print(result_dic)
+    df = pd.DataFrame(result_dic).T.reset_index()
+    df.to_csv(f"Cases\\__results_analysis\\{folder_path}_results.csv", index=True)
+    return
+
+
 def get_solution_info_from_folder(folder_path: str):
     root = fr"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\{folder_path}"
     model_folders = os.listdir(root)
@@ -92,7 +121,8 @@ def get_solution_info_from_folder(folder_path: str):
 
 def main():
     # get_tc_results_from_folder(folder_path="eetc_tcVI")
-    get_solution_info_from_folder(folder_path="eetc_tcVI")
+    # get_solution_info_from_folder(folder_path="eetc_tcVI")
+    get_eetcvao_results_from_folder("eetc-vao_VI")
     pass
 
 
