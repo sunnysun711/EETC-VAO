@@ -763,7 +763,6 @@ class EETC_VAO(OptimizationModel):
 
             e: np.ndarray = np.array([model.cbGetNodeRel(_) for _ in model._variable_groups["vao"]["e"].values()])
 
-
         # e = model.model._variable_groups["vao"]
         ...
 

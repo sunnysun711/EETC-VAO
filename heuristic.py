@@ -30,18 +30,32 @@ def get_eetc_solution_from_ek(ek: np.ndarray, trk: Track, tr: Train) -> dict[str
     pass
 
 
-def local_search_callback(where, model: gp.Model):
-    # if where == gp.GRB.Callback.MIPSOL:  # Integer solution found.
-    #
-    #     # Retrieve incumbent solution
-    #     IsResourceGet = model.cbGetSolution(IsResource)
-    #     DoesBurnGet = model.cbGetSolution(DoesBurn)
-    #     IsResourceV = {n: round(IsResourceGet[n]) for n in IsResourceGet}
-    #     DoesBurnV = {n: round(DoesBurnGet[n]) for n in DoesBurnGet}
-    #
-    #
-    #     Incumbent = set(  # Set of nodes with a resource
-    #         n for n in Nodes for t in ResAtTime if IsResourceV[n, t] > .5)
+# main function for ANS1
+def get_feasible_track_from_relaxed_elevations(relaxed_elevations: np.ndarray) -> Track:
+    # the first step is to get current VPI locations
+    # (absolute VPI points derived from relaxed elevations without considerations of feasibility)
+    vpi_points: np.ndarray = get_vpi_points_from_relaxed_elevations(relaxed_elevations)
 
-    pass
+    # the second step is to check slope length constraints
+    # just delete the nearest VPI point that violate the slope length constraint
+    vpi_points: np.ndarray = update_vpi_points_with_slope_len_constraint(vpi_points)
+
+    # the third step is to check gradient constraints
+    vpi_points: np.ndarray = update_vpi_points_with_gradient_constraint(vpi_points)
+
+    # transform vpi_points to track
+    track = get_track_from_vpi(vpi_points)
+
+    return track
+
+
+def get_vpi_points_from_relaxed_elevations(relaxed_elevations: np.ndarray) -> np.ndarray:
+    vpi_ix: list[int] = []
+    vpi_y: list[float] = []
+    for ix, (l, m, n) in enumerate(zip(relaxed_elevations[:-2], relaxed_elevations[1:-1], relaxed_elevations[2:])):
+        if l + n != 2 * m:
+            vpi_ix.append(ix + 1)
+            vpi_y.append(m)
+    new_vpi = np.array([vpi_ix, vpi_y]).T
+    return new_vpi
 
