@@ -7,6 +7,16 @@ from matplotlib.lines import Line2D
 from dataIO import read_data, get_random_seed
 
 
+# Notes:
+# ------
+# points, x, y: real coordinates
+# ixy, ix, iy: coordinates indexed by ground.ds and ground.de
+# vpi_ixy, vpi_ix, vpi_iy: only vpi coordinates
+
+RANDOM_GROUND_NAMES: list[str] = list(read_data("ground_data\\random_ground_data.json").keys())
+REAL_GROUND_NAMES: list[str] = list(read_data("ground_data\\real_ground_data.json").keys())
+
+
 def _running_mean(x: np.array, N: int) -> np.ndarray:
     cum_sum = np.cumsum(np.insert(x, 0, 0))
     return (cum_sum[N:] - cum_sum[:-N]) / N
@@ -47,6 +57,13 @@ def generate_random_ground_points(
 
 
 def calculate_elevation(points: np.array, x: float) -> float:
+    """
+    Calculates the elevation at a given x-coordinate based on a series of points.
+
+    :return: The interpolated y-coordinate (elevation) at the given x-coordinate. If the
+        x-coordinate exactly matches one of the points, the corresponding elevation
+        is returned. Otherwise, linear interpolation is used to estimate the elevation.
+    """
     i_s = np.searchsorted(points[:, 0], x)
     if x in points[:, 0]:
         return points[i_s, 1]
@@ -57,6 +74,13 @@ def calculate_elevation(points: np.array, x: float) -> float:
 
 
 def discretize_points(points: np.array, dx: float, dy: float) -> np.ndarray:
+    """
+    Discretizes a series of points into a grid with specified x and y intervals.
+
+    :return: A 2D numpy array where each row represents a discretized point with the
+        first column as the x-coordinate and the second column as the y-coordinate.
+        The y-coordinates are rounded down to the nearest multiple of `dy`.
+    """
     x = np.arange(points[0, 0], points[-1, 0] + dx, dx)
     x = x[:-1] if x[-1] > points[-1, 0] else x
     y = np.array([calculate_elevation(points, i) // dy * dy for i in x])
@@ -64,6 +88,12 @@ def discretize_points(points: np.array, dx: float, dy: float) -> np.ndarray:
 
 
 def get_bottom_left_corner_coordinates(points: np.array) -> tuple[float, float]:
+    """
+    Finds the bottom-left corner (minimum x and y coordinates) of a series of points.
+
+    :return: A tuple containing the minimum x-coordinate and the minimum y-coordinate
+        from the given points, representing the bottom-left corner.
+    """
     x, y = points.T
     return x.min(), y.min()
 
@@ -76,25 +106,72 @@ def shift_point_coordinates(points: np.array, bottom_left_corner_coordinates: tu
     return new_points
 
 
-def from_points_index_to_discrete_points(
-        points_index: np.array,
-        bottom_left_corner_coordinates: tuple[float],
-        dx: float,
-        dy: float) -> np.ndarray:
-    new_x = points_index[:, 0] * dx + bottom_left_corner_coordinates[0]
-    new_y = points_index[:, 1] * dy + bottom_left_corner_coordinates[1]
-    return np.array([new_x, new_y]).T
+def from_points_index_to_discrete_points(ixy: np.array, bottom_left_corner_coordinates: tuple[float],
+                                         dx: float, dy: float) -> np.ndarray:
+    """
+
+    :param ixy: A 2D numpy array where each row represents a point index with the first
+        column as the x-index (ix) and the second column as the y-index (iy) in the discretized grid.
+    :param bottom_left_corner_coordinates: A tuple containing the x, y coordinates of the
+        bottom-left corner of the original points.
+    :param dx:
+    :param dy:
+    :return: A 2D numpy array where each row represents the actual point coordinates
+        corresponding to the given indices in the discretized grid (ixy).
+    """
+    x = ixy[:, 0] * dx + bottom_left_corner_coordinates[0]
+    y = ixy[:, 1] * dy + bottom_left_corner_coordinates[1]
+    return np.array([x, y]).T
 
 
 def from_ie_to_e(ie: np.array, bottom_left_corner_coordinates: tuple[float], dy: float) -> np.ndarray:
+    """Converts y-indices (iy) in the discretized grid back into actual y-coordinates (elevations)."""
     return ie * dy + bottom_left_corner_coordinates[1]
 
 
 def get_minmax_gradient_list_from_p_vpi(
-        sigma: int, p_vpi: np.array,
+        sigma: int, p_vpi: np.ndarray,
         i_max: float, di_max: float,
         start_from_left: bool = True,
         get_max_grad: bool = True) -> list[float]:
+    """
+    Generates a list of minimum or maximum gradients for a given series of potential vertical
+    points of intersection (P_VPI), ensuring that the gradients do not exceed specified limits.
+
+    This function calculates a sequence of gradients based on the input parameters, while
+    considering the maximum allowable gradient (`i_max`) and the maximum allowable difference
+    between successive gradients (`di_max`). The calculation ensures that each slope section
+    contains at least `sigma` intervals, where each interval has a length of `ds`.
+
+    Parameters:
+    -----------
+    sigma : int
+        The minimum number of intervals (`ds`) that a slope section must contain.
+
+    p_vpi : np.array
+        A numpy array of binary values representing the potential vertical points of
+        intersection (VPI). A value of 1 indicates a VPI, and 0 indicates no VPI.
+
+    i_max : float
+        The maximum allowable gradient in the system.
+
+    di_max : float
+        The maximum allowable difference between successive gradients.
+
+    start_from_left : bool, optional (default=True)
+        If True, the gradient calculation starts from the left (beginning of the array).
+        If False, the calculation starts from the right (end of the array).
+
+    get_max_grad : bool, optional (default=True)
+        If True, the function calculates the maximum possible gradients.
+        If False, it calculates the minimum possible gradients.
+
+    Returns:
+    --------
+    minmax_grad : list[float]
+        A list of calculated gradients, constrained by the input limits (`i_max` and `di_max`),
+        ensuring that each slope section contains at least `sigma` intervals.
+    """
     current_slope_length_in_ds = sigma
     current_gradient = 0
 
@@ -121,7 +198,43 @@ def get_minmax_gradient_list_from_p_vpi(
     return minmax_grad
 
 
-def get_e_from_grad_list(e_anchor: float, gradients: list[float], ds: float, de: float, from_left: bool) -> np.ndarray:
+def get_e_from_grad_list(
+        e_anchor: float,
+        gradients: list[float],
+        ds: float, de: float,
+        from_left: bool) -> np.ndarray:
+    """
+    Computes a list of elevations based on an anchor elevation and a list of gradients.
+
+    This function calculates a series of elevation values starting from an anchor point (`e_anchor`),
+    using a list of gradients that represent the slope between points. The calculation can proceed
+    from left to right or right to left, depending on the `from_left` parameter.
+
+    Parameters:
+    -----------
+    e_anchor : float
+        The starting elevation at the anchor point.
+
+    gradients : list[float]
+        A list of gradient values (slopes) between successive points. Positive values indicate
+        an upward slope, while negative values indicate a downward slope.
+
+    ds : float
+        The distance between successive points in the same unit as the elevation.
+
+    de : float
+        A scaling factor for the elevation difference, used to normalize the effect of the gradients.
+
+    from_left : bool
+        If True, the calculation proceeds from the left (i.e., using the gradients as provided).
+        If False, the calculation proceeds from the right (i.e., using the gradients in reverse order).
+
+    Returns:
+    --------
+    np.ndarray
+        A numpy array of computed elevation values, starting from `e_anchor` and adjusted based on
+        the provided gradients.
+    """
     gradients = gradients if from_left else gradients[::-1]
     e_list: list[float] = [e_anchor]
     current_e = e_anchor
@@ -133,6 +246,32 @@ def get_e_from_grad_list(e_anchor: float, gradients: list[float], ds: float, de:
 
 
 def get_envelope(series: np.ndarray, step: int, is_max: bool = True):
+    """
+    Computes the envelope of a given time series by finding either the maximum or minimum value
+    within each segment of the series, depending on the value of `is_max`. The function returns
+    an array that represents the envelope, which includes the positions and values of these extrema.
+
+    Parameters:
+    -----------
+    series : np.ndarray
+        The input time series data as a 1D numpy array.
+
+    step : int
+        The length of each segment in which the time series is divided. The envelope will
+        be computed by finding the extreme value (maximum or minimum) in each segment.
+
+    is_max : bool, optional (default=True)
+        If True, the function will compute the upper envelope (maximum values).
+        If False, the function will compute the lower envelope (minimum values).
+
+    Returns:
+    --------
+    envelope : np.ndarray
+        A 2x(num_loops+2) numpy array, vpi_ixy like, where the first row contains the indices of the
+        envelope points, and the second row contains the corresponding values. The envelope
+        includes the first and last points of the original series to ensure the envelope covers
+        the entire range of the series.
+    """
     num_loops = round(series.size / step)
     envelope = np.zeros((2, num_loops))
     f_index = np.argmax if is_max else np.argmin
@@ -147,13 +286,39 @@ def get_envelope(series: np.ndarray, step: int, is_max: bool = True):
     envelope[0, num_loops - 1] = index + step * (num_loops - 1)
     # add first and last data
     envelope = np.hstack(([[0], [series[0]]], envelope.tolist(), [[series.size - 1], [series[-1]]]))
+    # drop duplicate columns
+    if envelope[0, 0] == envelope[0, 1]:
+        envelope = envelope[:, 1:]
+    if envelope[0, -1] == envelope[0, -2]:
+        envelope = envelope[:, :-1]
     return envelope
 
 
-def interpolate_envelope(envelope: np.array) -> np.ndarray:
-    num_s = int(envelope[0, -1])
+def interpolate_vpi_ixy(vpi_ixy: np.array) -> np.ndarray:
+    """
+    Interpolates the vpi_ixy data to create a full time series.
+
+    This function takes a vpi_ixy, which consists of sparse points representing the
+    extreme values of a time series, and interpolates these points to produce a complete
+    time series with values at every time index. Linear interpolation is used to fill in
+    the gaps between the known vpi points.
+
+    Parameters:
+    -----------
+    vpi_ixy : np.array
+        A 2xN numpy array where the first row contains the indices of the vpi points,
+        and the second row contains the corresponding values of the time series at those points.
+
+    Returns:
+    --------
+    full_data_interpolated : np.ndarray
+        A 1D numpy array representing the time series with interpolated values between
+        the original vpi points. The length of this array matches the highest index
+        in the vpi ixy points.
+    """
+    num_s = int(vpi_ixy[0, -1])
     full_data = np.full(num_s + 1, np.nan)
-    for point in envelope.T:
+    for point in vpi_ixy.T:
         full_data[int(point[0])] = point[1]
     time_indices = np.arange(0, len(full_data))
     valid_indices = ~np.isnan(full_data)
@@ -162,8 +327,14 @@ def interpolate_envelope(envelope: np.array) -> np.ndarray:
 
 
 class Ground:
-    def __init__(self, name: str, type_: str = "random") -> None:
+    def __init__(self, name: str) -> None:
         self.name: str = name
+        if name in RANDOM_GROUND_NAMES:
+            type_ = 'random'
+        elif name in REAL_GROUND_NAMES:
+            type_ = 'real'
+        else:
+            raise ValueError(f"Ground {name} not found.")
         data = read_data(f"ground_data\\{type_}_ground_data.json")[name]
         self.data: dict[str, Any] = data
 
@@ -234,7 +405,7 @@ class Ground:
 
     def get_discrete_points(self) -> np.ndarray:
         dis_points = from_points_index_to_discrete_points(
-            points_index=self.points_index,
+            ixy=self.points_index,
             bottom_left_corner_coordinates=self.bottom_left_corner_coordinates,
             dx=self.ds, dy=self.de
         )
@@ -329,10 +500,12 @@ class Ground:
         if self.envelope_step is None:
             num_envelope: int = 10  # to be tuned
             self.envelope_step = max(int(self.sigma * 2), self.e6g.size // num_envelope)
-        upper_envelope = get_envelope(series=self.e6g, step=self.envelope_step, is_max=True)
-        lower_envelope = get_envelope(series=self.e6g, step=self.envelope_step, is_max=False)
-        upper_envelope_full = interpolate_envelope(envelope=upper_envelope)
-        lower_envelope_full = interpolate_envelope(envelope=lower_envelope)
+        upper_envelope = get_envelope(series=self.e6g[1:-1], step=self.envelope_step, is_max=True)
+        lower_envelope = get_envelope(series=self.e6g[1:-1], step=self.envelope_step, is_max=False)
+        upper_envelope_full = interpolate_vpi_ixy(vpi_ixy=upper_envelope)
+        upper_envelope_full = np.hstack((upper_envelope_full[0], upper_envelope_full, upper_envelope_full[-1]))
+        lower_envelope_full = interpolate_vpi_ixy(vpi_ixy=lower_envelope)
+        lower_envelope_full = np.hstack((lower_envelope_full[0], lower_envelope_full, lower_envelope_full[-1]))
 
         # if the lower envelope has greater gradients than i_max, smooth it
         e_diff_range = self.i_max * self.ds / self.de
@@ -405,14 +578,16 @@ class Ground:
 
 
 def main():
-    gd = Ground(name="gd6", type_="random")
-    # gd = Ground(name="gd_gaoyan", type_="real")
+    gd = Ground(name="gd6")
+    # gd = Ground(name="gd_gaoyan")
     # for grd in ["gd0", "gd1", "gd2", "gd3", "gd4", "gd5", "gd6"]:
     #     gd = Ground(name=grd)
     #     print(gd.num_s)
 
-    matplotlib.use('TkAgg')
-    fig = gd.plot_ground_with_envelope()
+    # matplotlib.use('TkAgg')
+    # fig = gd.plot_ground_with_envelope()
+
+    print(get_envelope(series=gd.e6g, step=8))
     pass
 
 

@@ -72,24 +72,24 @@ def parse_log_file(log_file_path: str) -> dict[str, float]:
     return results
 
 
-def get_tc_log_results_from_folder(folder_path: str):
+def save_tc_log_results_from_folder(folder_path: str):
     """get train control brief results from log files in the specified folder."""
     root = fr"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\{folder_path}"
     model_folders = os.listdir(root)
-    result_dic: dict[tuple[str, str], dict[str, float]] = {}
+    result_dic: dict[tuple[str, str, str], dict[str, float]] = {}
     for model_folder in model_folders:
-        case, train, model_name = model_folder.split("__")
-        print(case, train, model_name)
-        log_file: str = os.path.join(root, model_folder, f"{case}__{train}__{model_name}.log")
-        result_dic[case, train] = parse_log_file(log_file)
+        grd, train, model_name = model_folder.split("__")
+        print(grd, train, model_name)
+        log_file: str = os.path.join(root, model_folder, f"{grd}__{train}__{model_name}.log")
+        result_dic[grd, train, model_name] = parse_log_file(log_file)
     print(result_dic)
     df = pd.DataFrame(result_dic).T.reset_index()
     print(df.head(5))
-    df.to_csv(f"{folder_path}_results.csv", index=True)
+    df.to_csv(fr"Cases\__results_analysis\{folder_path}_results.csv", index=True)
     return
 
 
-def get_eetcvao_log_results_from_folder(folder_path: str):
+def save_eetcvao_log_results_from_folder(folder_path: str):
     """get EETC-VAO brief results from log files in the specified folder."""
     root = fr"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\{folder_path}"
     model_folders = os.listdir(root)
@@ -109,34 +109,34 @@ def get_eetcvao_log_results_from_folder(folder_path: str):
     return
 
 
-def load_solution_from_file(json_file_path: str) -> dict[str, Any]:
+def load_solution_info(json_file_path: str) -> dict[str, Any]:
     """Load solution information from a JSON file."""
     json_data = json.load(open(json_file_path, 'r', encoding='utf-8'))
     return json_data
 
 
-def load_solution_from_case(folder_root: str, model_folder: str) -> dict[str, Any]:
+def load_solution_info_from_case(folder_root: str, model_folder: str) -> dict[str, Any]:
     """
     Load solution information from a specific case folder.
-    :param folder_root: first level full folder path, for e.g. fr"E:\...\EETC-VAO_202404\Cases\eetc-vao".
+    :param folder_root: first level full folder path, for e.g. "Cases\\eetc-vao".
     :param model_folder: second level model folder path, for e.g. "gd1__HXD2__eetc-vao"
     :return:
     """
     case, train, model_name = model_folder.split("__")
     print(case, train, model_name)
     solution_json_file: str = os.path.join(folder_root, model_folder, f"{case}__{train}__{model_name}.json")
-    solution: dict[str, Any] = load_solution_from_file(solution_json_file)
+    solution: dict[str, Any] = load_solution_info(solution_json_file)
     return solution
 
 
-def save_folder_solution_to_csv(folder_path: str):
+def save_folder_solution(folder_path: str):
     """Extract solution information from JSON files in the specified folder and save to a CSV."""
     root = fr"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\{folder_path}"
     model_folders = os.listdir(root)
-    result_dic: dict[tuple[str, str], dict[str, float]] = {}
+    result_dic: dict[tuple[str, str, str], dict[str, float]] = {}
     for model_folder in model_folders:
         case, train, model_name = model_folder.split("__")
-        json_data = load_solution_from_case(root, model_folder)
+        json_data = load_solution_info_from_case(root, model_folder)
 
         this_dict: dict[str, float] = {
             "Status": json_data['SolutionInfo']['Status'],
@@ -144,11 +144,11 @@ def save_folder_solution_to_csv(folder_path: str):
             "Runtime": json_data['SolutionInfo']['Runtime'],
             "ObjVal": json_data['SolutionInfo']['ObjVal'],
         }
-        result_dic[case, train] = this_dict
+        result_dic[case, train, model_name] = this_dict
     print(result_dic)
     df = pd.DataFrame(result_dic).T.reset_index()
     print(df.head(5))
-    df.to_csv(f"{folder_path}_solution_info.csv", index=True)
+    df.to_csv(fr"Cases\__results_analysis\{folder_path}_solution_info.csv", index=True)
     pass
 
 
@@ -208,7 +208,6 @@ def plot_tc_results(variables: dict[str, Any], ds: int = 100, bottom_left_loc=0,
     filled_E_k__d: list = fill_missing_values(E_k__d, range(1, S + 2))
     filled_u__u: list = fill_missing_values(u__u, range(1, S + 1))
     filled_u__d: list = fill_missing_values(u__d, range(1, S + 1))
-
     filled_v__u = np.sqrt(filled_E_k__u)
     filled_v__d = np.sqrt(filled_E_k__d)
 
@@ -218,7 +217,7 @@ def plot_tc_results(variables: dict[str, Any], ds: int = 100, bottom_left_loc=0,
     ax1 = plt.subplot(211)
     ax2 = plt.subplot(212, sharex=ax1)
 
-    marker_size = 0
+    marker_size = 0  # set marker to no size
 
     ax1.plot(distances, filled_v__d, marker='o', markersize=marker_size, ls="-", label="v_d")
     ax1.plot(distances, filled_v__u, marker='x', markersize=marker_size, ls="-", label="v_u")
@@ -232,24 +231,41 @@ def plot_tc_results(variables: dict[str, Any], ds: int = 100, bottom_left_loc=0,
     ax2.set_xlabel("Horizontal location (m)", fontsize="small")
     ax2.set_ylabel("Unit control force (N/kN)", fontsize="small")
     plt.tight_layout()
-
-    # plt.show()
-
+    plt.show()
     plt.savefig(os.path.join(save_path, "tc_result.pdf"), dpi=600)
-
     return
 
 
-def main():
-    # get_tc_results_from_folder(folder_path="eetc_tcVI")
-    # get_solution_info_from_folder(folder_path="eetc_tcVI")
-    # get_eetcvao_results_from_folder("eetc-vao_VI")
-
-    solution = load_solution_from_case(
-        folder_root=r"E:\OneDrive\Documents\00-MyResearch\20230524_VAO-EETC\EETC-VAO_202404\Cases\eetc-vao_LC_VI_tcVI",
-        model_folder="gd_gaoyan__CRH380AL__eetc-vao_LC_VI_tcVI")
+def get_track_ele_from_file(file: str, S: int) -> np.ndarray:
+    """
+    Get track elevation variables from a VAO solution file.
+    :param file: path to the VAO solution file.
+    :param S: number of intervals.
+    :return: e, shape (S+2, ), index: [0, S+1]
+    """
+    solution = load_solution_info(file)
     variables = extract_variables_from_solution(solution)
-    plot_tc_results(variables, ds=100, bottom_left_loc=40000)
+    e = extract_specific_variable(variables, variable_name="e")
+    e = np.array(fill_missing_values(e, range(0, S + 2)))
+    return e
+
+
+def main():
+    # save_folder_solution(folder_path="vao_LC_VI")
+    # save_tc_log_results_from_folder(folder_path="sotc")
+    # save_folder_solution(folder_path="sotc")
+    # save_tc_log_results_from_folder(folder_path="eetc")
+    # save_folder_solution(folder_path="eetc")
+    # save_tc_log_results_from_folder(folder_path="eetc_vao")
+    # save_folder_solution(folder_path="eetc_vao")
+    # save_tc_log_results_from_folder(folder_path="eetc_vao_LC_VI_tcVI")
+    # save_folder_solution(folder_path="eetc_vao_LC_VI_tcVI")
+
+    # solution = load_solution_from_case(
+    #     folder_root=r"Cases\eetc-vao_LC_VI_tcVI",
+    #     model_folder="gd_gaoyan__CRH380AL__eetc-vao_LC_VI_tcVI")
+    # variables = extract_variables_from_solution(solution)
+    # plot_tc_results(variables, ds=100, bottom_left_loc=40000)
     pass
 
 

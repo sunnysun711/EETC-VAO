@@ -1,7 +1,7 @@
 {
-    "gd_gaoyan":{
+    "gd_gaoyan": {
         "theta": 20,
-        "ds": 100, 
+        "ds": 100,
         "de": 1,
         "time": {
             "CRH380AL": {
@@ -39,5 +39,210 @@
         "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
         "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
         "envelope_step": null
+    },
+    "gd_hp1_100": {
+        "theta": 20,
+        "ds": 100,
+        "de": 1,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 130,
+                "TU_MAX": 130,
+                "TD_MIN": 110,
+                "TU_MIN": 110
+            },
+            "HXD1D": {
+                "TD_MAX": 133,
+                "TU_MAX": 133,
+                "TD_MIN": 112,
+                "TU_MIN": 112
+            },
+            "HXD2": {
+                "TD_MAX": 135,
+                "TU_MAX": 135,
+                "TD_MIN": 113,
+                "TU_MIN": 113
+            }
+        },
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "HP1_100.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 15
+    },
+    "gd_hp1_50": {
+        "theta": 20,
+        "ds": 50,
+        "de": 1,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 130,
+                "TU_MAX": 130,
+                "TD_MIN": 110,
+                "TU_MIN": 110
+            },
+            "HXD1D": {
+                "TD_MAX": 133,
+                "TU_MAX": 133,
+                "TD_MIN": 112,
+                "TU_MIN": 112
+            },
+            "HXD2": {
+                "TD_MAX": 135,
+                "TU_MAX": 135,
+                "TD_MIN": 113,
+                "TU_MIN": 113
+            }
+        },
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "HP1_50.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
+    },
+    "gd_hp2_100": {
+        "theta": 20,
+        "ds": 100,
+        "de": 1,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 300,
+                "TU_MAX": 300,
+                "TD_MIN": 256,
+                "TU_MIN": 255
+            },
+            "HXD1D": {
+                "TD_MAX": 330,
+                "TU_MAX": 330,
+                "TD_MIN": 280,
+                "TU_MIN": 279
+            },
+            "HXD2": {
+                "TD_MAX": 360,
+                "TU_MAX": 360,
+                "TD_MIN": 301,
+                "TU_MIN": 301
+            }
+        },
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "HP2_100.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 15
+    },
+    "gd_hp2_50": {
+        "theta": 20,
+        "ds": 50,
+        "de": 1,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 300,
+                "TU_MAX": 300,
+                "TD_MIN": 256,
+                "TU_MIN": 255
+            },
+            "HXD1D": {
+                "TD_MAX": 330,
+                "TU_MAX": 330,
+                "TD_MIN": 280,
+                "TU_MIN": 279
+            },
+            "HXD2": {
+                "TD_MAX": 360,
+                "TU_MAX": 360,
+                "TD_MIN": 301,
+                "TU_MIN": 301
+            }
+        },
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "HP2_50.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
+    },
+    "gd_hp3_50": {
+        "theta": 20,
+        "ds": 100,
+        "de": 1,
+        "time": {
+            "CRH380AL": {
+                "TD_MAX": 540,
+                "TU_MAX": 540,
+                "TD_MIN": 456,
+                "TU_MIN": 455
+            },
+            "HXD1D": {
+                "TD_MAX": 610,
+                "TU_MAX": 610,
+                "TD_MIN": 515,
+                "TU_MIN": 514
+            },
+            "HXD2": {
+                "TD_MAX": 670,
+                "TU_MAX": 670,
+                "TD_MIN": 563,
+                "TU_MIN": 563
+            }
+        },
+        "v_lim": [[0,200]],
+        "curve": [],
+        "point_arr_file": "HP3_50.csv",
+        "i_max": 0.03,
+        "di_max": 0.018,
+        "hb_min": 10,
+        "ht_min": 13,
+        "lk_under": 600,
+        "c_cut": 35,
+        "c_fill": 40,
+        "c_bg": 82000,
+        "c_tn": 80000,
+        "c6e_tn": 500000,
+        "N_tr_up": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "N_tr_down": {"CRH380AL": 547500, "HXD1D": 547500, "HXD2":  547500},
+        "envelope_step": 28
     }
 }
