@@ -12,7 +12,7 @@ from track import Track
 from train import Train
 
 CONST: dict[str, float] = {
-    'epsilon': 10e-5,
+    'epsilon': 10e-7,
     'e_u': 2.7777777777778 * 10e-7,  # e_u: 1 J = e_u x 1 kWh
     'lambda': 0.8,  # lambda: the average price of electricity in RMB per kWh. 按照居民用电差不多0.8元一度
     'eta': 0.85,  # eta: the conversion factor from electricity to kinetic energy. 按照王青元教授开会时候说的，0.85。
@@ -137,15 +137,18 @@ def add_vao_valid_inequalities(model: gp.Model, ground: Ground, variables: dict[
     e = variables['e']
     lb, ub = ground.get_absolute_e_range()
     le, ue = ground.get_envelope()
-    for s in range(ground.num_s + 2):
-        # determine the actual range of e
-        e_s_min, e_s_max = lb[s], ub[s]
-        if (ue[s] < e_s_max) & (ue[s] > e_s_min):
-            e_s_max = ue[s]
-        if (le[s] < e_s_max) & (le[s] > e_s_min):
-            e_s_min = le[s]
-        model.addConstr(e[s] >= e_s_min, name=f"vao-VI_lower[{s}]")
-        model.addConstr(e[s] <= e_s_max, name=f"vao-VI_upper[{s}]")
+    e_min, e_max = np.max([lb, le], axis=0), np.min([ub, ue], axis=0)
+    model.addConstrs((e[s] >= e_min[s] for s in range(0, ground.num_s + 2)), name="vao-VI_lower")
+    model.addConstrs((e[s] <= e_max[s] for s in range(0, ground.num_s + 2)), name="vao-VI_upper")
+    # for s in range(ground.num_s + 2):
+    #     # determine the actual range of e
+    #     e_s_min, e_s_max = lb[s], ub[s]
+    #     if (ue[s] < e_s_max) & (ue[s] > e_s_min):
+    #         e_s_max = ue[s]
+    #     if (le[s] < e_s_max) & (le[s] > e_s_min):
+    #         e_s_min = le[s]
+    #     model.addConstr(e[s] >= e_s_min, name=f"vao-VI_lower[{s}]")
+    #     model.addConstr(e[s] <= e_s_max, name=f"vao-VI_upper[{s}]")
     return
 
 
@@ -176,11 +179,13 @@ def add_tc_variables(
                             name=f'omega_i^{upd}')
     omega_r = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, name=f'omega_r^{upd}')
     omega_tn = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f'omega_tn^{upd}')
-    c = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-100, name=f'c^{upd}')
+    c = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=-110, name=f'c^{upd}')
     t = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f't^{upd}')
     f_pwa_v = model.addVars(range(2, S + 1), vtype=GRB.CONTINUOUS, name=f'f_PWA_v^{upd}')
 
-    return [u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v]
+    phi = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f'phi^{upd}')
+
+    return [u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v, phi]
 
 
 def add_tc_constraints(model: gp.Model,
@@ -191,24 +196,35 @@ def add_tc_constraints(model: gp.Model,
                        is_uphill_dir: bool = True
                        ):
     S = ground.num_s
-    u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v = variables.values()
+    u, kappa, E_k, f_tra, f_bra, omega_0, omega_i, omega_r, omega_tn, c, t, f_pwa_v, phi = variables.values()
     e, z1 = vao_variables['e'], vao_variables['z1']  # could be either parameters or variables
     upd = "u" if is_uphill_dir else "d"
 
     for i in range(1, S + 1):
         #   absolute value of control variables, to calculate the energy
         model.addGenConstrAbs(kappa[i], u[i], name=f"tc-kappa^{upd}[{i}]")
-        #   maximum traction PWA constraints
-        model.addGenConstrPWL(E_k[i], f_tra[i], train.traction_e[:, 0].tolist(), train.traction_e[:, 1].tolist(),
-                              name=f'tc-pwl_tra^{upd}[{i}]')
-        #   maximum brake PWA constraints
-        model.addGenConstrPWL(E_k[i], f_bra[i], train.brake_e[:, 0].tolist(), train.brake_e[:, 1].tolist(),
-                              name=f'tc-pwl_bra^{upd}[{i}]')
+
+        #   maximum traction / brake PWA constraints
+        if is_uphill_dir:
+            model.addGenConstrPWL(E_k[i + 1], f_tra[i], train.traction_e[:, 0].tolist(),
+                                  train.traction_e[:, 1].tolist(), name=f'tc-pwl_tra^{upd}[{i}]')
+            model.addGenConstrPWL(E_k[i + 1], f_bra[i], train.brake_e[:, 0].tolist(), train.brake_e[:, 1].tolist(),
+                                  name=f'tc-pwl_bra^{upd}[{i}]')
+        else:
+            model.addGenConstrPWL(E_k[i], f_tra[i], train.traction_e[:, 0].tolist(), train.traction_e[:, 1].tolist(),
+                                  name=f'tc-pwl_tra^{upd}[{i}]')
+            model.addGenConstrPWL(E_k[i], f_bra[i], train.brake_e[:, 0].tolist(), train.brake_e[:, 1].tolist(),
+                                  name=f'tc-pwl_bra^{upd}[{i}]')
 
     #       unit basic resistance affine using Strahl formula
-    model.addConstrs(
-        (omega_0[i] == train.r0_strahl + train.r2_strahl * E_k[i] for i in range(1, S + 1)),
-        name=f'tc-w0^{upd}')
+    if is_uphill_dir:
+        model.addConstrs(
+            (omega_0[i] == train.r0_strahl + train.r2_strahl * E_k[i + 1] for i in range(1, S + 1)),
+            name=f'tc-w0^{upd}')
+    else:
+        model.addConstrs(
+            (omega_0[i] == train.r0_strahl + train.r2_strahl * E_k[i] for i in range(1, S + 1)),
+            name=f'tc-w0^{upd}')
 
     #       unit control force range
     model.addConstrs((u[i] >= -f_bra[i] for i in range(1, S + 1)), name=f'tc-u_lb^{upd}')
@@ -219,25 +235,39 @@ def add_tc_constraints(model: gp.Model,
     if is_uphill_dir:
         model.addConstrs((omega_i[i] == _grad_pr * (e[i] - e[i + 1]) for i in range(1, S + 1)), name=f'tc-wi^{upd}')
     else:
-        model.addConstrs((omega_i[i] == _grad_pr * (e[i + 1] - e[i]) for i in range(1, S + 1)), name=f'tc-wi^{upd}')
+        model.addConstrs((omega_i[i] == _grad_pr * (e[i] - e[i - 1]) for i in range(1, S + 1)), name=f'tc-wi^{upd}')
 
     #       curve resist
     model.addConstrs((omega_r[i] == ground.curve_resist[i, 1] for i in range(1, S + 1)), name=f'tc-wr^{upd}')
 
     #       tunnel resist
-    if not isinstance(z1, gp.tupledict):  # z1 is considered a constant parameter in this case. (VAO input)
-        model.addConstrs(
-            (omega_tn[i] == train.r2 * train.r_tn * E_k[i] * z1[i] for i in range(1, S + 1)), name=f'tc-wtn^{upd}')
+    if not isinstance(z1, gp.tupledict):
+        # z1 is considered a constant parameter in this case. (VAO input)
+        # z1 is np.ndarray, indexing from [1, S+1], accessing from [0, S]
+        if is_uphill_dir:
+            model.addConstrs(
+                (omega_tn[i] == train.r2 * train.r_tn * E_k[i + 1] * z1[i - 1] for i in range(1, S + 1)),
+                name=f'tc-wtn^{upd}'
+            )
+        else:
+            model.addConstrs(
+                (omega_tn[i] == train.r2 * train.r_tn * E_k[i] * z1[i - 1] for i in range(1, S + 1)),
+                name=f'tc-wtn^{upd}'
+            )
     else:
-        # linearize
-        phi = model.addVars(range(1, S + 1), vtype=GRB.CONTINUOUS, lb=0, name=f'phi^{upd}')
+        # linearize (gurobi embedded)
+        # z1 is gp.tupledict, indexing from [1, S+1], accessing from [1, S+1].
+        if is_uphill_dir:
+            model.addConstrs((phi[i] == E_k[i + 1] * z1[i] for i in range(1, S + 1)), name=f"tc-phi^{upd}")
+        else:
+            model.addConstrs((phi[i] == E_k[i] * z1[i] for i in range(1, S + 1)), name=f"tc-phi^{upd}")
         model.addConstrs((omega_tn[i] == train.r2 * train.r_tn * phi[i] for i in range(1, S + 1)),
                          name=f'tc-wtn-1^{upd}')
-        model.addConstrs((phi[i] <= ground.ek_lim[i, 1] * z1[i] for i in range(1, S + 1)), name=f'tc-wtn-2^{upd}')
+        # model.addConstrs((phi[i] <= ground.ek_lim[i, 1] * z1[i] for i in range(1, S + 1)), name=f'tc-wtn-2^{upd}')
         # model.addConstrs((phi[i] >= 0 for i in range(1, S + 1)), name=f'cs-34-3-{upd}')
-        model.addConstrs((phi[i] <= E_k[i] for i in range(1, S + 1)), name=f'tc-wtn-4^{upd}')
-        model.addConstrs((phi[i] >= E_k[i] - ground.ek_lim[i, 1] * (1 - z1[i]) for i in range(1, S + 1)),
-                         name=f'tc-wtn-5^{upd}')
+        # model.addConstrs((phi[i] <= E_k[i] for i in range(1, S + 1)), name=f'tc-wtn-4^{upd}')
+        # model.addConstrs((phi[i] >= E_k[i] - ground.ek_lim[i, 1] * (1 - z1[i]) for i in range(1, S + 1)),
+        #                  name=f'tc-wtn-5^{upd}')
 
     #    unit joint force
     model.addConstrs(
@@ -305,9 +335,10 @@ class OptimizationModel:
         e.g. gd_gaoyan__CRH380AL__vao_LC_VI, gd_gaoyan__CRH380AL__eetc_tcVI, gd2__HXD2__eetc-vao_LC_VI_tcVI
     """
 
-    def __init__(self, name: str, ground: Ground, train: Train = None):
+    def __init__(self, name: str, ground: Ground, train: Train = None, debug_mode: bool = False):
         train_name = "" if train is None else train.name
         self.name: str = f"{ground.name}__{train_name}__{name}"  # vao, eetc, sotc, eetc-vao, ...
+        self.debug_mode: bool = debug_mode
         self.model: gp.Model = gp.Model(name)
         self.model._variable_groups: dict = {}  # for callback use.
         self.ground: Ground = ground
@@ -322,7 +353,7 @@ class OptimizationModel:
         self.variable_groups = {}  # vao, tc_u, tc_d
         self._vao_variable_names = ['e', 'pi', 'C', 'C6tn_e', 'gamma', 'z1', 'z2', 'z3', 'z4', 'z5']
         self._tc_variable_names = ["u", "kappa", "E_k", "f_tra", "f_bra", "omega_0", "omega_i", "omega_r", "omega_tn",
-                                   "c", "t", "f_pwa_v"]
+                                   "c", "t", "f_pwa_v", "phi"]
         return
 
     def add_vars(self, variable_group_name: str = None, variable_function: Callable = None, **kwargs):
@@ -348,6 +379,13 @@ class OptimizationModel:
         return
 
     def set_warm_start(self, warm_start_data: dict[str, dict[str, gp.Var | float | int]]):
+        """
+
+        :param warm_start_data: {grp: {var_name: {var_key: value,...},...},...}
+            grp: should be in ['vao', 'tc_u', 'tc_d']
+            var_name: should be in ['e', 'pi', 'C', 'C6tn_e', 'gamma', 'z1', 'z2', 'z3', 'z4', 'z5']
+        :return:
+        """
         if warm_start_data is None:
             return
         for grp, grp_variables in warm_start_data.items():
@@ -362,10 +400,11 @@ class OptimizationModel:
                         raise ValueError("warm_start_data should only contain integers, floats, or gp.Var.")
                     self.variable_groups[grp][var_name][var_key].Start = to_assign
 
-                    # # add absolute range for debugging
-                    # self.model.addRange(
-                    #     self.variable_groups[grp][var_name][var_key], to_assign, to_assign,
-                    #     name=f"BOUND{grp}_{var_name}[{var_key}]")
+                    # add absolute range for debugging
+                    if self.debug_mode:
+                        self.model.addRange(
+                            self.variable_groups[grp][var_name][var_key], to_assign, to_assign,
+                            name=f"BOUND{grp}_{var_name}[{var_key}]")
 
         return
 
@@ -482,13 +521,16 @@ class OptimizationModel:
 
 
 class VAO(OptimizationModel):
-    def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True, plot_ground: bool = True):
+    def __init__(self, ground: Ground, LC_ON: bool = True, VI_on: bool = True, plot_ground: bool = True,
+                 warm_start_data: dict[str, dict[str, gp.Var | dict]] = None, debug_mode: bool = False):
         name = "vao"
         if LC_ON:
             name += "_LC"
         if VI_on:
             name += "_VI"
-        super().__init__(name=name, ground=ground, train=None)
+        if warm_start_data is not None:
+            name += "_WS"
+        super().__init__(name=name, ground=ground, train=None, debug_mode=debug_mode)
         self.add_variables()
 
         self.add_constraints(constraint_func=add_vao_constraints)
@@ -508,6 +550,7 @@ class VAO(OptimizationModel):
             self.ground.plot_ground_with_envelope().savefig(
                 f"{self.directory}\\{self.name}-ground_profile.pdf", dpi=600
             )
+        self.set_warm_start(warm_start_data)
         return
 
     def add_variables(self):
@@ -523,7 +566,7 @@ class VAO(OptimizationModel):
 
     def optimize(self, callback_function: Callable = None, save_on: bool = True,
                  IntegralityFocus=1, NumericFocus=1, Cuts=2,
-                 IntFeasTol=1e-07, MIPGap: float = 0, TimeLimit=3600 * 2, **kwargs):
+                 IntFeasTol=1e-05, MIPGap: float = 0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
             callback_function=callback_function,
             save_on=save_on,
@@ -554,14 +597,14 @@ class VAO(OptimizationModel):
 
 class TC(OptimizationModel):
     def __init__(self, train: Train, track: Track, is_ee: bool = True, tcVI_on: bool = True,
-                 warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None):
+                 warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None, debug_mode: bool = False):
         name = "eetc" if is_ee else "sotc"
         tcVI_on = tcVI_on if is_ee else False
         if tcVI_on:
             name += "_tcVI"
         if warm_start_data is not None:
             name += "_WS"
-        super().__init__(name=name, ground=track.ground, train=train)
+        super().__init__(name=name, ground=track.ground, train=train, debug_mode=debug_mode)
         self.add_variables()
 
         vao_variables: dict[str, np.ndarray] = {"e": track.e, "z1": track.z1}
@@ -624,7 +667,7 @@ class TC(OptimizationModel):
 
     def optimize(self, callback_function: Callable = None, save_on: bool = True,
                  IntegralityFocus=1, NumericFocus=1, Cuts=2,
-                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+                 IntFeasTol=1e-05, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
             callback_function=callback_function,
             save_on=save_on,
@@ -668,7 +711,8 @@ class EETC_VAO(OptimizationModel):
                  ground: Ground, train: Train,
                  LC_on: bool = True, VI_on: bool = True,
                  tcVI_on: bool = True,
-                 warm_start_data: dict[str, dict[str, gp.Var | float | int]] = None):
+                 warm_start_data: dict[str, dict[str, gp.Var | dict]] = None,
+                 debug_mode: bool = False, eetc_obj_weight: float = 1.0):
         name = f"eetc-vao"
         if LC_on:
             name += "_LC"
@@ -678,7 +722,7 @@ class EETC_VAO(OptimizationModel):
             name += "_tcVI"
         if warm_start_data is not None:
             name += "_WS"
-        super().__init__(name, ground, train)
+        super().__init__(name, ground, train, debug_mode=debug_mode)
 
         self.add_variables()
 
@@ -701,12 +745,14 @@ class EETC_VAO(OptimizationModel):
         _pr_obj = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
         n_tr_up = self.ground.N_tr_up[self.train.name]
         n_tr_down = self.ground.N_tr_down[self.train.name]
+        weighted_n_tr_up = n_tr_up * eetc_obj_weight
+        weighted_n_tr_down = n_tr_down * eetc_obj_weight
         # auxiliary energy cost
-        obj_exp += gp.quicksum(self.variable_groups['tc_u']['t']) * self.train.mu * n_tr_up
-        obj_exp += gp.quicksum(self.variable_groups['tc_d']['t']) * self.train.mu * n_tr_down
+        obj_exp += gp.quicksum(self.variable_groups['tc_u']['t']) * self.train.mu * weighted_n_tr_up
+        obj_exp += gp.quicksum(self.variable_groups['tc_d']['t']) * self.train.mu * weighted_n_tr_down
         # traction energy cost
-        obj_exp += gp.quicksum(self.variable_groups['tc_u']['kappa']) * _pr_obj * n_tr_up
-        obj_exp += gp.quicksum(self.variable_groups['tc_d']['kappa']) * _pr_obj * n_tr_down
+        obj_exp += gp.quicksum(self.variable_groups['tc_u']['kappa']) * _pr_obj * weighted_n_tr_up
+        obj_exp += gp.quicksum(self.variable_groups['tc_d']['kappa']) * _pr_obj * weighted_n_tr_down
         obj_exp = obj_exp * CONST['lambda']
         self.model.setObjective(obj_exp, GRB.MINIMIZE)
 
@@ -768,7 +814,7 @@ class EETC_VAO(OptimizationModel):
 
     def optimize(self, callback_function: Callable = None, save_on: bool = True,
                  IntegralityFocus=1, NumericFocus=1, Cuts=2,
-                 IntFeasTol=1e-07, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
+                 IntFeasTol=1e-05, MIPGap=0, TimeLimit=3600 * 2, **kwargs):
         super().opt(
             callback_function=callback_function,
             save_on=save_on,
@@ -826,17 +872,6 @@ class EETC_VAO(OptimizationModel):
         return
 
 
-def get_all_ground_sotc(train: Train):
-    for i in range(1, 7):
-        gd = Ground(name=f"gd{i}")
-        vao = VAO(ground=gd, VI_on=True, LC_ON=True, plot_ground=False)
-        vao.optimize(save_on=False)
-        track = vao.get_track()
-        sotc = TC(train=train, track=track, is_ee=False)
-        sotc.optimize(save_on=True)
-    return
-
-
 def get_all_train_sotc(ground: Ground):
     vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
     vao.optimize(save_on=True)
@@ -887,7 +922,7 @@ def get_all_case_eetc():
 
 
 def main():
-    # grd = Ground(name="gd_gaoyan", type_="real")
+    # grd = Ground(name="gd_gaoyan")
     grd = Ground(name="gd1")
     tr = Train("HXD1D")
     # one_case_routine(ground=grd, train=tr, warm_start_case="eetc")
