@@ -72,6 +72,7 @@ class Track:
         return
 
     def get_stair_plot_data(self) -> tuple[np.array, np.array]:
+        """Return a tuple of (ground_stair_points, track_stair_points)"""
         ground_stair_points = self.ground.get_stair_plot_data()
         track_x = ground_stair_points[0].copy()
         track_y = self.e[1:-1].copy() * self.ground.de + self.ground.bottom_left_corner_coordinates[1]
@@ -184,16 +185,6 @@ def gen_track_from_file(ground: Ground, json_file: str) -> Track:
 
 
 def main():
-    # ground = Ground("gd_gaoyan")
-    ground = Ground("gd2")
-
-    from heuristic import gen_track
-    import matplotlib
-    matplotlib.use("TkAgg")
-    track = gen_track(ground=ground, display_on=True)
-    track.get_warm_start_data()
-    track.plot_ground_track()
-
     pass
 
 
