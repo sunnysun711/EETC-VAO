@@ -872,71 +872,7 @@ class EETC_VAO(OptimizationModel):
         return
 
 
-def get_all_train_sotc(ground: Ground):
-    vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
-    vao.optimize(save_on=True)
-    track = vao.get_track()
-    for train in ["CRH380AL", "HXD1D", "HXD2"]:
-        tr = Train(name=train)
-        sotc = TC(train=tr, track=track, is_ee=False)
-        sotc.optimize(save_on=True)
-    return
-
-
-def one_case_routine(ground: Ground, train: Train, warm_start_case: str = "sotc"):
-    if warm_start_case == "":
-        ev = EETC_VAO(ground=ground, train=train)
-        ev.optimize(save_on=True)
-        return
-    vao = VAO(ground=ground, VI_on=True, LC_ON=True, plot_ground=True)
-    vao.optimize(save_on=True, MIPGap=0.0011)
-    track = vao.get_track()
-    if warm_start_case == "sotc":
-        tc = TC(train=train, track=track, is_ee=False)
-        tc.optimize(save_on=True)
-    elif warm_start_case == "eetc":
-        tc1 = TC(train=train, track=track, is_ee=False)
-        tc1.optimize(save_on=False, TimeLimit=3600)
-        tc = TC(train=train, track=track, is_ee=True, tcVI_on=False, warm_start_data=tc1.variable_groups)
-        tc.optimize(save_on=True)
-    else:
-        raise ValueError("warm_start_case must be \"sotc\" or \"eetc\".")
-
-    variables_dict: dict = {**vao.variable_groups, **tc.variable_groups}
-    ev = EETC_VAO(ground=ground, train=train, warm_start_data=variables_dict, tcVI_on=False)
-    ev.optimize(save_on=True)
-    return
-
-
-def get_all_case_eetc():
-    for i in range(1, 7):
-        gd = Ground(name=f"gd{i}")
-        vao = VAO(ground=gd, plot_ground=True)
-        vao.optimize(save_on=True)
-        track = vao.get_track()
-        for train in ["CRH380AL", "HXD1D", "HXD2"]:
-            tr = Train(name=train)
-            tc = TC(train=tr, track=track, is_ee=True)
-            tc.optimize()
-    pass
-
-
 def main():
-    # grd = Ground(name="gd_gaoyan")
-    grd = Ground(name="gd1")
-    tr = Train("HXD1D")
-    # one_case_routine(ground=grd, train=tr, warm_start_case="eetc")
-    ev = EETC_VAO(ground=grd, train=tr)
-    ev.optimize(callback_function=EETC_VAO.callback)
-
-    # grd = Ground(name="gd2")
-    # vao = VAO(ground=grd, plot_ground=False)
-    # vao.optimize(save_on=True)
-    # track = vao.get_track()
-    # for train in ["CRH380AL", "HXD1D", "HXD2"]:
-    #     tr = Train(name=train)
-    #     tc = TC(train=tr, track=track, is_ee=True, tcVI_on=True)
-    #     tc.optimize()
     pass
 
 

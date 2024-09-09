@@ -6,7 +6,6 @@ import matplotlib
 from matplotlib.lines import Line2D
 from dataIO import read_data, get_random_seed
 
-
 # Notes:
 # ------
 # points, x, y: real coordinates
@@ -452,6 +451,7 @@ class Ground:
         return p_vpi_array.astype(int)
 
     def get_stair_plot_data(self) -> np.ndarray:
+        """Return a np.ndarray with shape of (2, num_s+2), first row locations, second row elevations"""
         x = self.points_index[:, 0] * self.ds + self.bottom_left_corner_coordinates[0]
         x = np.array([x, x]).T.flatten()
 
@@ -578,16 +578,6 @@ class Ground:
 
 
 def main():
-    gd = Ground(name="gd6")
-    # gd = Ground(name="gd_gaoyan")
-    # for grd in ["gd0", "gd1", "gd2", "gd3", "gd4", "gd5", "gd6"]:
-    #     gd = Ground(name=grd)
-    #     print(gd.num_s)
-
-    # matplotlib.use('TkAgg')
-    # fig = gd.plot_ground_with_envelope()
-
-    print(get_envelope(series=gd.e6g, step=8))
     pass
 
 

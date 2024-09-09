@@ -1,93 +1,12 @@
-# heuristic algorithm to find suboptimal solutions
+# heuristic algorithm to find feasible solutions
 from typing import Any
 
 import numpy as np
 from scipy.stats import truncnorm
 
-from get_opt_results import get_track_ele_from_file
 from ground import Ground, interpolate_vpi_ixy
-from track import Track, get_track_type, gen_track_from_file
+from track import Track, gen_track_from_file
 from train import Train
-
-
-# def find_track_heuristic(gd: Ground) -> Track:
-#     lb, ub = gd.get_absolute_e_range()
-#     le, ue = gd.get_envelope()
-#     e_min, e_max = np.max([lb, le], axis=0), np.min([ub, ue], axis=0)
-#
-#     pass
-#
-#
-# def get_vao_solution_from_track(track: Track) -> dict[str, dict[int | tuple, int | float]]:
-#     pass
-#
-#
-# def get_ek_heuristic(trk: Track, tr: Train, max_running_time: float, is_uphill_dir: bool) -> dict[str]:
-#     pass
-#
-#
-# def get_eetc_solution_from_ek(ek: np.ndarray, trk: Track, tr: Train) -> dict[str, dict[int | tuple, int | float]]:
-#     pass
-#
-#
-# # main function for ANS1
-# def get_feasible_track_from_relaxed_elevations(relaxed_elevations: np.ndarray) -> Track:
-#     # the first step is to get current VPI locations
-#     # (absolute VPI points derived from relaxed elevations without considerations of feasibility)
-#     vpi_points: np.ndarray = get_vpi_points_from_relaxed_elevations(relaxed_elevations)
-#
-#     # the second step is to check slope length constraints
-#     # just delete the nearest VPI point that violate the slope length constraint
-#     vpi_points: np.ndarray = update_vpi_points_with_slope_len_constraint(vpi_points)
-#
-#     # the third step is to check gradient constraints
-#     vpi_points: np.ndarray = update_vpi_points_with_gradient_constraint(vpi_points)
-#
-#     # transform vpi_points to track
-#     track = get_track_from_vpi(vpi_points)
-#
-#     return track
-#
-#
-# def get_vpi_points_from_relaxed_elevations(relaxed_elevations: np.ndarray) -> np.ndarray:
-#     vpi_ix: list[int] = []
-#     vpi_y: list[float] = []
-#     for ix, (l, m, n) in enumerate(zip(relaxed_elevations[:-2], relaxed_elevations[1:-1], relaxed_elevations[2:])):
-#         if l + n != 2 * m:
-#             vpi_ix.append(ix + 1)
-#             vpi_y.append(m)
-#     new_vpi = np.array([vpi_ix, vpi_y]).T
-#     return new_vpi
-#
-#
-# def find_true_segments(arr: np.ndarray) -> list[tuple[int, int]]:
-#     """
-#     Finds and returns the start and end indices of all continuous True segments in a 1D numpy array.
-#
-#     Parameters:
-#     -----------
-#     arr : np.ndarray
-#         A 1D numpy array consisting of boolean values (True or False).
-#
-#     Returns:
-#     --------
-#     segments : list[tuple[int, int]]
-#         A list of tuples where each tuple contains the start and end index of a continuous True segment.
-#     """
-#     segments = []
-#     n = len(arr)
-#     i = 0
-#
-#     while i < n:
-#         if arr[i]:
-#             start = i
-#             while i < n and arr[i]:
-#                 i += 1
-#             end = i - 1
-#             segments.append((start, end))
-#         i += 1
-#
-#     return segments
 
 
 def select_in_range(left: float | np.ndarray, right: float | np.ndarray,
@@ -532,7 +451,7 @@ def gen_tc_sol(trk: Track, tr: Train, is_ee: bool = True, display_on: bool = Fal
             loop_count = 0
             while True:
                 loop_count += 1
-                if loop_count > 7:  # need to adjust params
+                if loop_count > 2:  # need to adjust params
                     if T <= T_MAX * 0.98:
                         lower_ratio -= 0.05
                     elif T > T_MAX:
@@ -714,39 +633,21 @@ def gen_warm_start_data(ground: Ground, tr: Train, vao_sol_file: str = None,
 
 def cal_time_from_v(v_arr: np.ndarray, PWL_EK: list, PWL_F_EK: list, ds: float, num_s: int):
     """calculate time from v_arr using approximation method in the proposed model."""
-    T = 0
-    T += 2 * ds * np.interp(v_arr[1] ** 2, PWL_EK, PWL_F_EK)
-    T += 2 * ds * np.interp(v_arr[-2] ** 2, PWL_EK, PWL_F_EK)
-    for i in range(2, num_s):
-        T += ds / 2 * (
-                np.interp(v_arr[i] ** 2, PWL_EK, PWL_F_EK) +
-                np.interp(v_arr[i + 1] ** 2, PWL_EK, PWL_F_EK)
-        )
-    return T
+    E_k = {int(i + 1): v_arr[i] ** 2 for i in range(num_s + 1)}
+    f_pwa_v = {i: np.interp(E_k[i], PWL_EK, PWL_F_EK) for i in range(2, num_s + 1)}
+
+    t = {}
+    for i in range(1, num_s + 1):
+        if i == 1:
+            t[i] = 2 * ds * f_pwa_v[2]
+        elif i == num_s:
+            t[i] = 2 * ds * f_pwa_v[num_s]
+        else:
+            t[i] = ds / 2 * (f_pwa_v[i] + f_pwa_v[i + 1])
+    return sum(t.values())
 
 
 def main():
-    gn = "gd2"
-    grd = Ground(gn)
-    tr = Train("CRH380AL")
-    trk = gen_track(grd, display_on=False)
-
-    # wsd = gen_warm_start_data(
-    #     ground, train,
-    #     vao_sol_file=fr"Cases\vao_LC_VI\{ground_name}____vao_LC_VI\{ground_name}____vao_LC_VI.json",
-    #     display_on=True
-    # )
-    # vd, ud, wd, vu, uu, wu = gen_tc_sol(trk, tr, is_ee=False, display_on=True)
-    # print(vd)
-    # T_MAX = grd.time['CRH380AL']['TD_MAX']
-    # v_anchors = get_v_anchors(S=grd.num_s, DS=grd.ds, tr=tr, T_MAX=T_MAX, v_lim_real=vd, anchor_ratio=0.5,
-    #                           lower_ratio=0.65)
-    # print(v_anchors)
-    tr.max_v = 80
-    v, u, v_sel, omega = simulate_tc(trk, tr, is_downhill_dir=True, anchor_ratio=0.4)
-    print("velocity:\n", v)
-    print("select ratio:\n", v_sel)
-
     pass
 
 

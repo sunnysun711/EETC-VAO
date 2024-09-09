@@ -1,2 +1,7 @@
 /Cases/
 /ground_data/Other ground data/
+/run_script_*.py
+/test.ipynb
+/get_opt_results.py
+/dataIO.py
+/git_diff.txt
