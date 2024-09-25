@@ -712,7 +712,9 @@ class EETC_VAO(OptimizationModel):
                  LC_on: bool = True, VI_on: bool = True,
                  tcVI_on: bool = True,
                  warm_start_data: dict[str, dict[str, gp.Var | dict]] = None,
-                 debug_mode: bool = False, eetc_obj_weight: float = 1.0):
+                 debug_mode: bool = False, n_tr_weight: list[float, float] = None):
+        if n_tr_weight is None:
+            n_tr_weight = [1.0, 1.0]  # [train up weight, train down weight]
         name = f"eetc-vao"
         if LC_on:
             name += "_LC"
@@ -745,8 +747,8 @@ class EETC_VAO(OptimizationModel):
         _pr_obj = CONST['e_u'] * self.train.M_t * self.train.g * self.ground.ds / CONST['eta']
         n_tr_up = self.ground.N_tr_up[self.train.name]
         n_tr_down = self.ground.N_tr_down[self.train.name]
-        weighted_n_tr_up = n_tr_up * eetc_obj_weight
-        weighted_n_tr_down = n_tr_down * eetc_obj_weight
+        weighted_n_tr_up = n_tr_up * n_tr_weight[0]
+        weighted_n_tr_down = n_tr_down * n_tr_weight[1]
         # auxiliary energy cost
         obj_exp += gp.quicksum(self.variable_groups['tc_u']['t']) * self.train.mu * weighted_n_tr_up
         obj_exp += gp.quicksum(self.variable_groups['tc_d']['t']) * self.train.mu * weighted_n_tr_down
